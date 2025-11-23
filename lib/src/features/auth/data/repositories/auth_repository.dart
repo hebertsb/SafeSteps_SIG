@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../../domain/entities/app_user.dart';
+import '../../domain/entities/auth_result.dart';
+import '../datasources/remote_auth_data_source.dart';
 
 class AuthRepository {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
@@ -95,7 +97,37 @@ class AuthRepository {
     }
   }
 
-  // Handle Firebase Auth exceptions
+  // Backend Login
+  Future<AuthResult> loginWithBackend({
+    required String email,
+    required String password,
+  }) async {
+    final remoteDataSource = RemoteAuthDataSourceImpl();
+    return await remoteDataSource.login(email: email, password: password);
+  }
+
+  // Backend Register
+  Future<AuthResult> registerWithBackend({
+    required String name,
+    required String email,
+    required String password,
+    required String type,
+  }) async {
+    final remoteDataSource = RemoteAuthDataSourceImpl();
+    return await remoteDataSource.register(
+      name: name,
+      email: email,
+      password: password,
+      type: type,
+    );
+  }
+
+  // Update FCM Token
+  Future<void> updateFcmToken(String token, String jwtToken) async {
+    final remoteDataSource = RemoteAuthDataSourceImpl();
+    await remoteDataSource.updateFcmToken(token: token, jwtToken: jwtToken);
+  }
+
   String _handleAuthException(FirebaseAuthException e) {
     switch (e.code) {
       case 'user-not-found':

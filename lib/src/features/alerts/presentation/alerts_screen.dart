@@ -10,7 +10,7 @@ class AlertsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifications = ref.watch(notificationsProvider);
-    final unreadCount = ref.watch(unreadCountProvider);
+
 
     return Scaffold(
       appBar: AppBar(

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -18,6 +19,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/map',
+    refreshListenable: GoRouterRefreshStream(
+      ref.watch(authControllerProvider.future).asStream(),
+    ),
     redirect: (context, state) {
       final isLoggedIn = authState.value != null;
       final isLoggingIn = state.matchedLocation == '/login' || state.matchedLocation == '/register';
@@ -90,3 +94,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+// Helper class to convert Stream to Listenable for GoRouter refresh
+class GoRouterRefreshStream extends ChangeNotifier {
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    notifyListeners();
+    _subscription = stream.asBroadcastStream().listen(
+      (_) => notifyListeners(),
+    );
+  }
+
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}

@@ -38,7 +38,7 @@ class ProfileScreen extends ConsumerWidget {
                       width: 64,
                       height: 64,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
+                        color: Colors.white.withOpacity(0.2),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.person, color: Colors.white, size: 36),
@@ -214,8 +214,7 @@ class ProfileScreen extends ConsumerWidget {
             
             OutlinedButton.icon(
               onPressed: () async {
-                final authRepo = ref.read(authRepositoryProvider);
-                await authRepo.signOut();
+                await ref.read(authControllerProvider.notifier).logout();
               },
               icon: const Icon(Icons.logout, color: Colors.red),
               label: const Text('Cerrar Sesión', style: TextStyle(color: Colors.red)),
@@ -243,7 +242,7 @@ class ProfileScreen extends ConsumerWidget {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: iconColor.withValues(alpha: 0.1),
+            color: iconColor.withOpacity(0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: iconColor, size: 24),

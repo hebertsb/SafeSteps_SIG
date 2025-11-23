@@ -21,9 +21,11 @@ dependencies:
   firebase_auth: ^5.6.2
   google_sign_in: ^6.2.2
   firebase_messaging: ^15.1.5
-  # flutter_local_notifications: ^18.0.1  # Temporarily disabled
+  flutter_local_notifications: ^18.0.1
   cloud_firestore: ^5.5.2
   shared_preferences: ^2.3.4
+  http: ^1.6.0
+  flutter_secure_storage: ^9.2.4
 
 dev_dependencies:
   flutter_test:

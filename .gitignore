@@ -158,6 +158,25 @@ coverage/
 *.lcov
 test/.test_coverage.dart
 
+# ========================================
+# DOCUMENTACIÓN Y GUÍAS INTERNAS
+# ========================================
+
+# Guías de implementación (uso interno)
+GUIA_*.txt
+GUIA_*.md
+*_GUIDE.txt
+*_GUIDE.md
+
+# Notas de desarrollo
+NOTAS_*.txt
+TODO_*.txt
+build_error*.log
+
+# Documentación temporal
+temp_docs/
+draft_docs/
+
 # Exceptions to above rules (files you DO want to track)
 !gradle-wrapper.jar
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages

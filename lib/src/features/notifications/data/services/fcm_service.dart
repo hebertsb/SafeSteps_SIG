@@ -1,10 +1,11 @@
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'dart:developer';
 import 'dart:async';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 // Background message handler (must be top-level function)
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  print('Handling background message: ${message.messageId}');
+  log('Handling background message: ${message.messageId}');
 }
 
 class FCMService {
@@ -30,15 +31,15 @@ class FCMService {
     );
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      print('User granted permission');
+      log('User granted permission');
     } else {
-      print('User declined or has not accepted permission');
+      log('User declined or has not accepted permission');
       return;
     }
 
     // Get FCM token
     _fcmToken = await _firebaseMessaging.getToken();
-    print('FCM Token: $_fcmToken');
+    log('FCM Token: $_fcmToken');
 
     // Configure foreground notification presentation
     await _firebaseMessaging.setForegroundNotificationPresentationOptions(
@@ -52,27 +53,27 @@ class FCMService {
 
     // Handle foreground messages
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      print('Foreground message received: ${message.notification?.title}');
+      log('Foreground message received: ${message.notification?.title}');
       _messageStreamController.add(message);
     });
 
     // Handle notification tap when app is in background
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      print('Notification tapped: ${message.data}');
+      log('Notification tapped: ${message.data}');
       _messageStreamController.add(message);
     });
 
     // Handle notification tap when app was terminated
     RemoteMessage? initialMessage = await _firebaseMessaging.getInitialMessage();
     if (initialMessage != null) {
-      print('App opened from terminated state: ${initialMessage.data}');
+      log('App opened from terminated state: ${initialMessage.data}');
       _messageStreamController.add(initialMessage);
     }
 
     // Listen for token refresh
     _firebaseMessaging.onTokenRefresh.listen((newToken) {
       _fcmToken = newToken;
-      print('FCM Token refreshed: $newToken');
+      log('FCM Token refreshed: $newToken');
     });
   }
 

@@ -21,4 +21,13 @@ class AppUser {
       photoUrl: firebaseUser.photoURL,
     );
   }
+
+  factory AppUser.fromJson(Map<String, dynamic> json) {
+    return AppUser(
+      id: json['id'].toString(),
+      email: json['email'] as String,
+      name: json['nombre'] as String,
+      photoUrl: null, // Backend doesn't send photoUrl yet
+    );
+  }
 }

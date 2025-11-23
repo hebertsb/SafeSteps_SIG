@@ -30,7 +30,7 @@ class MarkerWidget extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: isSelected
-                  ? AppColors.primary.withValues(alpha: 0.3)
+                  ? AppColors.primary.withOpacity(0.3)
                   : Colors.transparent,
             ),
           ),
@@ -44,7 +44,7 @@ class MarkerWidget extends StatelessWidget {
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.2),
+                  color: Colors.black.withOpacity(0.2),
                   blurRadius: 6,
                   offset: const Offset(0, 4),
                 ),
@@ -68,12 +68,12 @@ class MarkerWidget extends StatelessWidget {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.5),
+                  color: Colors.white.withOpacity(0.5),
                   width: 2,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
+                    color: Colors.black.withOpacity(0.1),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
