@@ -1,0 +1,163 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+/build/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# ========================================
+# ARCHIVOS SENSIBLES - NO SUBIR A GIT
+# ========================================
+
+# Firebase Configuration Files (CONTIENEN CLAVES SENSIBLES)
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+ios/firebase_app_id_file.json
+lib/firebase_options.dart
+
+# Environment Variables y Secrets
+.env
+.env.local
+.env.*.local
+*.env
+secrets.json
+config/secrets.yaml
+
+# API Keys y Tokens
+**/api_keys.dart
+**/secrets.dart
+**/credentials.json
+**/service-account.json
+
+# Signing Keys (Android)
+*.jks
+*.keystore
+key.properties
+android/key.properties
+android/app/upload-keystore.jks
+
+# iOS Signing
+ios/Runner/GoogleService-Info.plist
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+
+# ========================================
+# BUILD Y CACHE
+# ========================================
+
+# Build directories
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+
+# Android
+android/.gradle/
+android/app/build/
+android/build/
+android/gradle/
+android/gradlew
+android/gradlew.bat
+android/local.properties
+android/.idea/
+android/captures/
+android/app/release/
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/
+ios/Runner.xcworkspace/
+ios/Runner.xcodeproj/
+ios/build/
+ios/.generated/
+
+# ========================================
+# DEPENDENCIAS Y MÓDULOS
+# ========================================
+
+# Node modules (si usas algún tool de Node)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# ========================================
+# ARCHIVOS TEMPORALES Y DE SISTEMA
+# ========================================
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ========================================
+# ARCHIVOS DE DESARROLLO
+# ========================================
+
+# Coverage
+coverage/
+*.lcov
+test/.test_coverage.dart
+
+# Exceptions to above rules (files you DO want to track)
+!gradle-wrapper.jar
+!/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
