@@ -41,4 +41,33 @@ class Child {
       lastUpdated: DateTime.parse(json['lastUpdated']),
     );
   }
+
+
+  Child copyWith({
+    String? id,
+    String? name,
+    int? age,
+    String? emoji,
+    String? phone,
+    String? device,
+    String? status,
+    double? battery,
+    double? latitude,
+    double? longitude,
+    DateTime? lastUpdated,
+  }) {
+    return Child(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      age: age ?? this.age,
+      emoji: emoji ?? this.emoji,
+      phone: phone ?? this.phone,
+      device: device ?? this.device,
+      status: status ?? this.status,
+      battery: battery ?? this.battery,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      lastUpdated: lastUpdated ?? this.lastUpdated,
+    );
+  }
 }

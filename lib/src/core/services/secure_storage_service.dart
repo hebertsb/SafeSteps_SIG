@@ -6,6 +6,10 @@ class SecureStorageService {
   static final SecureStorageService instance = SecureStorageService._();
 
   static const String tokenKey = 'jwt_token';
+  static const String userIdKey = 'user_id';
+  static const String userNameKey = 'user_name';
+  static const String userEmailKey = 'user_email';
+  static const String userTypeKey = 'user_type';
 
   final _storage = const FlutterSecureStorage();
 
