@@ -84,7 +84,9 @@ class ProfileScreen extends ConsumerWidget {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 OutlinedButton.icon(
-                  onPressed: () {},
+                  onPressed: () {
+                    context.push('/create-child');
+                  },
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('Agregar'),
                   style: OutlinedButton.styleFrom(

@@ -10,6 +10,8 @@ import 'features/alerts/presentation/alerts_screen.dart';
 import 'features/auth/presentation/login_screen.dart';
 import 'features/auth/presentation/register_screen.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
+import 'features/profile/presentation/create_child_screen.dart';
+import 'features/child/presentation/child_home_screen.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -30,8 +32,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return '/login';
       }
       
-      if (isLoggedIn && isLoggingIn) {
-        return '/map';
+      if (isLoggedIn) {
+        final user = authState.value;
+        final isChild = user?.role == 'hijo';
+        
+        // Redirect child to child home if trying to access map or auth pages
+        if (isChild && (isLoggingIn || state.matchedLocation == '/map')) {
+          return '/child-home';
+        }
+        
+        // Redirect tutor to map if trying to access auth pages
+        if (!isChild && isLoggingIn) {
+          return '/map';
+        }
       }
       
       return null;
@@ -47,7 +60,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const RegisterScreen(),
       ),
       
-      // Main App Routes
+      // Child Routes
+      GoRoute(
+        path: '/child-home',
+        builder: (context, state) => const ChildHomeScreen(),
+      ),
+      
+      // Tutor Routes
+      GoRoute(
+        path: '/create-child',
+        builder: (context, state) => const CreateChildScreen(),
+      ),
+      
+      // Main App Routes (Tutor)
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           return BottomNavBar(navigationShell: navigationShell);
