@@ -1,4 +1,3 @@
-import 'dart:developer';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
@@ -40,23 +39,16 @@ class AuthController extends AsyncNotifier<AppUser?> {
 
   Future<void> _syncFcmToken(String jwtToken) async {
     try {
-      print('========== SYNCING FCM TOKEN ==========');
-      print('JWT Token (first 20 chars): ${jwtToken.substring(0, jwtToken.length > 20 ? 20 : jwtToken.length)}...');
-      
       final fcmToken = await FirebaseMessaging.instance.getToken();
-      print('FCM Token obtenido: $fcmToken');
       
       if (fcmToken == null) {
-        print('⚠️ FCM Token es null - No se puede sincronizar');
         return;
       }
       
-      print('Enviando FCM Token al backend...');
       final authRepository = ref.read(authRepositoryProvider);
       await authRepository.updateFcmToken(fcmToken, jwtToken);
-      print('✅ FCM Token synced with backend: $fcmToken');
     } catch (e) {
-      print('❌ Error syncing FCM token: $e');
+      // Handle error silently
     }
   }
 

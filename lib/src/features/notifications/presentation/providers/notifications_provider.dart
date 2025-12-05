@@ -1,7 +1,19 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:http/http.dart' as http;
 import '../../domain/entities/app_notification.dart';
 import '../../data/services/fcm_service.dart';
+import '../../domain/repositories/notifications_repository.dart';
+import '../../data/datasources/remote_notifications_data_source.dart';
+import '../../data/repositories/notifications_repository_impl.dart';
+
+// Repository Provider
+final notificationsRepositoryProvider = Provider<NotificationsRepository>((ref) {
+  return NotificationsRepositoryImpl(
+    RemoteNotificationsDataSourceImpl(client: http.Client()),
+  );
+});
 
 // FCM Service Provider
 final fcmServiceProvider = Provider<FCMService>((ref) {
@@ -10,38 +22,85 @@ final fcmServiceProvider = Provider<FCMService>((ref) {
 
 // Notifications State Provider using Riverpod 3.x Notifier
 class NotificationsNotifier extends Notifier<List<AppNotification>> {
+  late final NotificationsRepository _repository;
+
   @override
   List<AppNotification> build() {
+    _repository = ref.read(notificationsRepositoryProvider);
+    _fetchNotifications();
     return [];
+  }
+
+  Future<void> _fetchNotifications() async {
+    try {
+      final notifications = await _repository.getNotifications();
+      state = notifications;
+    } catch (e) {
+      // Handle error silently or expose via another provider
+      debugPrint('Error fetching notifications: $e');
+    }
+  }
+
+  Future<void> refresh() async {
+    await _fetchNotifications();
   }
 
   void addNotification(AppNotification notification) {
     state = [notification, ...state];
   }
 
-  void markAsRead(String id) {
-    state = [
-      for (final notification in state)
-        if (notification.id == id)
-          notification.copyWith(isRead: true)
-        else
-          notification,
-    ];
+  Future<void> markAsRead(String id) async {
+    try {
+      await _repository.markAsRead([id]);
+      state = [
+        for (final notification in state)
+          if (notification.id == id)
+            notification.copyWith(isRead: true)
+          else
+            notification,
+      ];
+    } catch (e) {
+      debugPrint('Error marking notification as read: $e');
+    }
   }
 
-  void markAllAsRead() {
-    state = [
-      for (final notification in state)
-        notification.copyWith(isRead: true),
-    ];
+  Future<void> markAllAsRead() async {
+    try {
+      await _repository.markAllAsRead();
+      state = [
+        for (final notification in state)
+          notification.copyWith(isRead: true),
+      ];
+    } catch (e) {
+      debugPrint('Error marking all as read: $e');
+    }
   }
 
-  void clearAll() {
-    state = [];
+  Future<void> clearAll() async {
+    // Note: Backend doesn't support "delete all" without IDs, 
+    // so we might need to delete visible ones or just clear local state.
+    // For now, we'll just clear local state to reflect UI action, 
+    // but ideally we should delete them from backend if that's the intent.
+    // Or implement a loop to delete all.
+    // Given the API, we'll just clear local for now or implement bulk delete of current list.
+    try {
+      final ids = state.map((n) => n.id).toList();
+      if (ids.isNotEmpty) {
+        await _repository.deleteNotifications(ids);
+        state = [];
+      }
+    } catch (e) {
+      debugPrint('Error clearing notifications: $e');
+    }
   }
 
-  void removeNotification(String id) {
-    state = state.where((n) => n.id != id).toList();
+  Future<void> removeNotification(String id) async {
+    try {
+      await _repository.deleteNotification(id);
+      state = state.where((n) => n.id != id).toList();
+    } catch (e) {
+      debugPrint('Error removing notification: $e');
+    }
   }
 }
 
@@ -50,9 +109,14 @@ final notificationsProvider = NotifierProvider<NotificationsNotifier, List<AppNo
 });
 
 // Unread Count Provider
-final unreadCountProvider = Provider<int>((ref) {
+final unreadCountProvider = FutureProvider<int>((ref) async {
+  // Option 1: Calculate from local state
   final notifications = ref.watch(notificationsProvider);
   return notifications.where((n) => !n.isRead).length;
+  
+  // Option 2: Fetch from backend (more accurate if pagination is used)
+  // final repository = ref.read(notificationsRepositoryProvider);
+  // return await repository.getUnreadCount();
 });
 
 // FCM Message Stream Provider
@@ -60,3 +124,4 @@ final fcmMessageStreamProvider = StreamProvider<RemoteMessage>((ref) {
   final fcmService = ref.watch(fcmServiceProvider);
   return fcmService.onMessage;
 });
+

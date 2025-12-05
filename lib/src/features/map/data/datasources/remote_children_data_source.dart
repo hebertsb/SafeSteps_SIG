@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../../../core/services/secure_storage_service.dart';
-import '../../../auth/domain/entities/child.dart';
+import '../../domain/entities/child.dart';
 
 abstract class RemoteChildrenDataSource {
   Future<List<Child>> getChildren();
@@ -12,11 +12,16 @@ abstract class RemoteChildrenDataSource {
     double? latitude,
     double? longitude,
   });
+  Future<Child> getChildById(String id);
+  Future<void> deleteChild(String id);
+  Future<Child> updateChild(String id, Map<String, dynamic> data);
+  Future<Child> updateChildLocation(String id, double latitude, double longitude);
+  Future<void> removeChildFromTutor(String tutorId, String childId);
 }
 
 class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
   // Use physical device IP - same as auth data source
-  static const _baseUrl = 'http://192.168.1.14:3000'; 
+  static const _baseUrl = 'http://127.0.0.1:3000'; 
   
   final http.Client client;
 
@@ -55,6 +60,138 @@ class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
   }
 
   @override
+  Future<Child> getChildById(String id) async {
+    final token = await _getToken();
+    if (token == null) throw Exception('No authenticated user');
+
+    final uri = Uri.parse('$_baseUrl/hijos/$id');
+    
+    try {
+      final response = await client.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return Child.fromJson(json);
+      } else {
+        throw Exception('Failed to load child: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error fetching child: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteChild(String id) async {
+    final token = await _getToken();
+    if (token == null) throw Exception('No authenticated user');
+
+    final uri = Uri.parse('$_baseUrl/hijos/$id');
+    
+    try {
+      final response = await client.delete(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode != 200 && response.statusCode != 204) {
+        throw Exception('Failed to delete child: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error deleting child: $e');
+    }
+  }
+
+  @override
+  Future<Child> updateChild(String id, Map<String, dynamic> data) async {
+    final token = await _getToken();
+    if (token == null) throw Exception('No authenticated user');
+
+    final uri = Uri.parse('$_baseUrl/hijos/$id');
+    
+    try {
+      final response = await client.patch(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(data),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return Child.fromJson(json);
+      } else {
+        throw Exception('Failed to update child: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error updating child: $e');
+    }
+  }
+
+  @override
+  Future<Child> updateChildLocation(String id, double latitude, double longitude) async {
+    final token = await _getToken();
+    if (token == null) throw Exception('No authenticated user');
+
+    final uri = Uri.parse('$_baseUrl/hijos/$id/location');
+    
+    try {
+      final response = await client.patch(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'latitud': latitude,
+          'longitud': longitude,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return Child.fromJson(json);
+      } else {
+        throw Exception('Failed to update child location: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error updating child location: $e');
+    }
+  }
+
+  @override
+  Future<void> removeChildFromTutor(String tutorId, String childId) async {
+    final token = await _getToken();
+    if (token == null) throw Exception('No authenticated user');
+
+    final uri = Uri.parse('$_baseUrl/tutores/$tutorId/hijos/$childId');
+    
+    try {
+      final response = await client.delete(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to remove child from tutor: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error removing child from tutor: $e');
+    }
+  }
+
+  @override
   Future<Child> createChild({
     required String name,
     required String email,
@@ -65,7 +202,8 @@ class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
     final token = await _getToken();
     if (token == null) throw Exception('No authenticated user');
 
-    final uri = Uri.parse('$_baseUrl/hijos');
+    // Updated endpoint to associate child with logged-in tutor automatically
+    final uri = Uri.parse('$_baseUrl/tutores/me/hijos');
     
     try {
       final response = await client.post(
@@ -78,8 +216,9 @@ class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
           'nombre': name,
           'email': email,
           'password': password,
-          if (latitude != null) 'latitud': latitude,
-          if (longitude != null) 'longitud': longitude,
+          // Latitude and longitude might not be supported by this specific endpoint based on docs,
+          // but sending them just in case or we can update location later.
+          // The docs say it receives nombre, email, password.
         }),
       );
 

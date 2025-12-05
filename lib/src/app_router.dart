@@ -7,8 +7,7 @@ import 'features/map/presentation/map_screen.dart';
 import 'features/zones/presentation/zones_screen.dart';
 import 'features/profile/presentation/profile_screen.dart';
 import 'features/alerts/presentation/alerts_screen.dart';
-import 'features/auth/presentation/login_screen.dart';
-import 'features/auth/presentation/register_screen.dart';
+import 'features/auth/presentation/auth_screen.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/profile/presentation/create_child_screen.dart';
 import 'features/child/presentation/child_home_screen.dart';
@@ -53,11 +52,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // Auth Routes
       GoRoute(
         path: '/login',
-        builder: (context, state) => const LoginScreen(),
+        builder: (context, state) => const AuthScreen(),
       ),
       GoRoute(
         path: '/register',
-        builder: (context, state) => const RegisterScreen(),
+        redirect: (context, state) => '/login',
       ),
       
       // Child Routes

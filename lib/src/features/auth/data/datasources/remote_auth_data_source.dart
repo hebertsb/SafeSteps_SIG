@@ -1,4 +1,3 @@
-import 'dart:developer';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../domain/entities/auth_result.dart';
@@ -16,7 +15,7 @@ abstract class RemoteAuthDataSource {
 
 class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
   // Use physical device IP
-  static const _baseUrl = 'http://192.168.1.14:3000'; 
+  static const _baseUrl = 'http://127.0.0.1:3000'; 
 
   final http.Client client;
 
@@ -29,8 +28,6 @@ class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
     required String password,
   }) async {
     final uri = Uri.parse('$_baseUrl/auth/login');
-    print('Attempting login to: $uri');
-    print('Email: $email');
     
     try {
       final response = await client.post(
@@ -44,9 +41,6 @@ class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
         }),
       );
 
-      print('Login response status: ${response.statusCode}');
-      print('Login response body: ${response.body}');
-
       if (response.statusCode == 200 || response.statusCode == 201) {
         final Map<String, dynamic> jsonBody = jsonDecode(response.body);
         return AuthResult.fromJson(jsonBody);
@@ -58,7 +52,6 @@ class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
             'Error inesperado (${response.statusCode}): ${response.reasonPhrase}');
       }
     } catch (e) {
-      print('Login error: $e');
       if (e is AuthException) rethrow;
       throw AuthException('Error de conexión: $e');
     }
@@ -104,10 +97,6 @@ class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
   @override
   Future<void> updateFcmToken({required String token, required String jwtToken}) async {
     final uri = Uri.parse('$_baseUrl/users/fcm-token');
-    print('========== UPDATE FCM TOKEN REQUEST ==========');
-    print('URL: $uri');
-    print('FCM Token: $token');
-    print('JWT Token (first 20 chars): ${jwtToken.substring(0, jwtToken.length > 20 ? 20 : jwtToken.length)}...');
     
     try {
       final response = await client.patch(
@@ -121,16 +110,11 @@ class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
         }),
       );
 
-      print('Status Code: ${response.statusCode}');
-      print('Response Body: ${response.body}');
-
-      if (response.statusCode == 200 || response.statusCode == 204) {
-        print('✅ FCM Token enviado correctamente');
-      } else {
-        print('❌ Error enviando FCM Token: ${response.body}');
+      if (response.statusCode != 200 && response.statusCode != 204) {
+        // Handle error silently or log to crashlytics
       }
     } catch (e) {
-      print('❌ Error en updateFcmToken: $e');
+      // Handle error silently
     }
   }
 }

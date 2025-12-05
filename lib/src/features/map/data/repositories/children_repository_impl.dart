@@ -13,6 +13,15 @@ class ChildrenRepositoryImpl implements ChildrenRepository {
   }
 
   @override
+  Future<Child?> getChildById(String id) async {
+    try {
+      return await _dataSource.getChildById(id);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  @override
   Future<Child> createChild({
     required String name,
     required String email,
@@ -27,5 +36,25 @@ class ChildrenRepositoryImpl implements ChildrenRepository {
       latitude: latitude,
       longitude: longitude,
     );
+  }
+
+  @override
+  Future<void> deleteChild(String id) async {
+    await _dataSource.deleteChild(id);
+  }
+
+  @override
+  Future<Child> updateChild(String id, Map<String, dynamic> data) async {
+    return await _dataSource.updateChild(id, data);
+  }
+
+  @override
+  Future<Child> updateChildLocation(String id, double latitude, double longitude) async {
+    return await _dataSource.updateChildLocation(id, latitude, longitude);
+  }
+
+  @override
+  Future<void> removeChildFromTutor(String tutorId, String childId) async {
+    await _dataSource.removeChildFromTutor(tutorId, childId);
   }
 }
