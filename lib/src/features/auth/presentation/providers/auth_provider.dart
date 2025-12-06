@@ -11,7 +11,9 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 });
 
 // Auth Controller Provider (Manages Auth State)
-final authControllerProvider = AsyncNotifierProvider<AuthController, AppUser?>(AuthController.new);
+final authControllerProvider = AsyncNotifierProvider<AuthController, AppUser?>(
+  AuthController.new,
+);
 
 class AuthController extends AsyncNotifier<AppUser?> {
   @override
@@ -22,14 +24,20 @@ class AuthController extends AsyncNotifier<AppUser?> {
   Future<AppUser?> _checkAuthState() async {
     try {
       // Check for stored token
-      final token = await SecureStorageService.instance.read(key: SecureStorageService.tokenKey);
-      
+      final token = await SecureStorageService.instance.read(
+        key: SecureStorageService.tokenKey,
+      );
+
       if (token != null) {
         // TODO: Validate token with backend or decode JWT to get user info
         // For now, we'll assume if token exists, user is logged in.
         // Ideally, we should fetch user profile from backend here.
         // Creating a dummy user for now to unblock navigation
-        return AppUser(id: 'backend_user', email: 'user@backend.com', name: 'User');
+        return AppUser(
+          id: 'backend_user',
+          email: 'user@backend.com',
+          name: 'User',
+        );
       }
       return null;
     } catch (e) {
@@ -40,11 +48,11 @@ class AuthController extends AsyncNotifier<AppUser?> {
   Future<void> _syncFcmToken(String jwtToken) async {
     try {
       final fcmToken = await FirebaseMessaging.instance.getToken();
-      
+
       if (fcmToken == null) {
         return;
       }
-      
+
       final authRepository = ref.read(authRepositoryProvider);
       await authRepository.updateFcmToken(fcmToken, jwtToken);
     } catch (e) {
@@ -56,8 +64,29 @@ class AuthController extends AsyncNotifier<AppUser?> {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final authRepository = ref.read(authRepositoryProvider);
-      final result = await authRepository.loginWithBackend(email: email, password: password);
-      
+      final result = await authRepository.loginWithBackend(
+        email: email,
+        password: password,
+      );
+
+      await SecureStorageService.instance.write(
+        key: SecureStorageService.tokenKey,
+        value: result.accessToken,
+      );
+
+      // Sync FCM Token
+      await _syncFcmToken(result.accessToken);
+
+      return result.user;
+    });
+  }
+
+  Future<void> loginWithCode({required String code}) async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() async {
+      final authRepository = ref.read(authRepositoryProvider);
+      final result = await authRepository.loginWithCode(code: code);
+
       await SecureStorageService.instance.write(
         key: SecureStorageService.tokenKey,
         value: result.accessToken,
@@ -85,7 +114,7 @@ class AuthController extends AsyncNotifier<AppUser?> {
         password: password,
         type: type,
       );
-      
+
       await SecureStorageService.instance.write(
         key: SecureStorageService.tokenKey,
         value: result.accessToken,
@@ -99,7 +128,9 @@ class AuthController extends AsyncNotifier<AppUser?> {
   }
 
   Future<void> logout() async {
-    await SecureStorageService.instance.delete(key: SecureStorageService.tokenKey);
+    await SecureStorageService.instance.delete(
+      key: SecureStorageService.tokenKey,
+    );
     // Sign out from Firebase to prevent conflicts
     final authRepository = ref.read(authRepositoryProvider);
     await authRepository.signOut();

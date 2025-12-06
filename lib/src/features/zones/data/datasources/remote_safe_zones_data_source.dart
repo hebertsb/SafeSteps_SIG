@@ -18,8 +18,9 @@ abstract class RemoteSafeZonesDataSource {
 }
 
 class RemoteSafeZonesDataSourceImpl implements RemoteSafeZonesDataSource {
-  // Use physical device IP - same as other data sources
-  static const _baseUrl = 'http://127.0.0.1:3000'; 
+  // Backend URL - Tu PC WiFi IP
+  // Para dispositivo físico o iOS simulator: usa 192.168.0.8:3000
+  static const _baseUrl = 'http://192.168.0.8:3000';
   
   final http.Client client;
 

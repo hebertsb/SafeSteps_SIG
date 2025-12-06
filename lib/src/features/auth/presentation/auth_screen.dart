@@ -12,7 +12,8 @@ class AuthScreen extends ConsumerStatefulWidget {
   ConsumerState<AuthScreen> createState() => _AuthScreenState();
 }
 
-class _AuthScreenState extends ConsumerState<AuthScreen> with SingleTickerProviderStateMixin {
+class _AuthScreenState extends ConsumerState<AuthScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
   bool _showFrontSide = true;
@@ -35,7 +36,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> with SingleTickerProvid
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    
+
     _animation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOutBack),
     );
@@ -70,7 +71,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> with SingleTickerProvid
 
   void _handleLogin() {
     if (_loginFormKey.currentState!.validate()) {
-      ref.read(authControllerProvider.notifier).login(
+      ref
+          .read(authControllerProvider.notifier)
+          .login(
             email: _loginEmailController.text.trim(),
             password: _loginPasswordController.text.trim(),
           );
@@ -79,7 +82,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> with SingleTickerProvid
 
   void _handleRegister() {
     if (_registerFormKey.currentState!.validate()) {
-      ref.read(authControllerProvider.notifier).register(
+      ref
+          .read(authControllerProvider.notifier)
+          .register(
             name: _registerNameController.text.trim(),
             email: _registerEmailController.text.trim(),
             password: _registerPasswordController.text.trim(),
@@ -150,17 +155,17 @@ class _AuthScreenState extends ConsumerState<AuthScreen> with SingleTickerProvid
                   Text(
                     'SafeSteps',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                        ),
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Protegiendo lo que más amas',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Colors.white70,
-                        ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyLarge?.copyWith(color: Colors.white70),
                   ),
                   const SizedBox(height: 32),
 
@@ -226,9 +231,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> with SingleTickerProvid
                 Text(
                   'Iniciar Sesión',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF1A237E),
-                      ),
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF1A237E),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Container(
@@ -242,7 +247,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> with SingleTickerProvid
               ],
             ),
           ),
-          
+
           // Form
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
@@ -258,7 +263,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> with SingleTickerProvid
                     validator: (v) => v?.isEmpty == true ? 'Requerido' : null,
                   ),
                   const SizedBox(height: 16),
-                  
+
                   _buildTextField(
                     controller: _loginPasswordController,
                     label: 'Contraseña',
@@ -267,7 +272,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> with SingleTickerProvid
                     validator: (v) => v?.isEmpty == true ? 'Requerido' : null,
                   ),
                   const SizedBox(height: 24),
-                  
+
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -299,7 +304,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> with SingleTickerProvid
                             ),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 16),
                   TextButton(
                     onPressed: isLoading ? null : _switchCard,
@@ -308,6 +313,27 @@ class _AuthScreenState extends ConsumerState<AuthScreen> with SingleTickerProvid
                       style: TextStyle(
                         color: const Color(0xFF1A237E).withOpacity(0.8),
                         fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+                  // Child Login Button
+                  OutlinedButton.icon(
+                    onPressed: isLoading
+                        ? null
+                        : () => context.go('/child-login'),
+                    icon: const Icon(Icons.child_care_rounded, size: 20),
+                    label: const Text('Soy un Hijo'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF00BCD4),
+                      side: const BorderSide(color: Color(0xFF00BCD4)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
                       ),
                     ),
                   ),
@@ -350,9 +376,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> with SingleTickerProvid
                 Text(
                   'Crear Cuenta',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF1A237E),
-                      ),
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF1A237E),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Container(
@@ -366,7 +392,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> with SingleTickerProvid
               ],
             ),
           ),
-          
+
           // Form
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
@@ -381,7 +407,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> with SingleTickerProvid
                     validator: (v) => v?.isEmpty == true ? 'Requerido' : null,
                   ),
                   const SizedBox(height: 16),
-                  
+
                   _buildTextField(
                     controller: _registerEmailController,
                     label: 'Correo Electrónico',
@@ -390,16 +416,17 @@ class _AuthScreenState extends ConsumerState<AuthScreen> with SingleTickerProvid
                     validator: (v) => v?.isEmpty == true ? 'Requerido' : null,
                   ),
                   const SizedBox(height: 16),
-                  
+
                   _buildTextField(
                     controller: _registerPasswordController,
                     label: 'Contraseña',
                     icon: Icons.lock_outline,
                     obscureText: true,
-                    validator: (v) => (v?.length ?? 0) < 6 ? 'Mínimo 6 caracteres' : null,
+                    validator: (v) =>
+                        (v?.length ?? 0) < 6 ? 'Mínimo 6 caracteres' : null,
                   ),
                   const SizedBox(height: 24),
-                  
+
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -431,7 +458,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> with SingleTickerProvid
                             ),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 16),
                   TextButton(
                     onPressed: isLoading ? null : _switchCard,
@@ -484,7 +511,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> with SingleTickerProvid
         ),
         filled: true,
         fillColor: Colors.grey[100],
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
       ),
     );
   }
