@@ -13,12 +13,9 @@ class ZoneMonitorService {
   Future<void> checkLocation(LatLng location) async {
     try {
       final zones = await _zonesRepository.getSafeZones();
-      final Distance distance = const Distance();
 
       for (final zone in zones) {
-        final zoneLocation = LatLng(zone.latitude, zone.longitude);
-        final dist = distance.as(LengthUnit.Meter, location, zoneLocation);
-        final isInside = dist <= zone.radius;
+        final isInside = _isPointInPolygon(location, zone.points);
 
         if (isInside && !_insideZoneIds.contains(zone.id)) {
           // Entered zone
@@ -39,5 +36,25 @@ class ZoneMonitorService {
     } catch (e) {
       debugPrint('Error checking zones: $e');
     }
+  }
+
+  // Ray Casting algorithm to check if point is inside polygon
+  bool _isPointInPolygon(LatLng point, List<LatLng> polygon) {
+    if (polygon.isEmpty) return false;
+    
+    bool isInside = false;
+    int j = polygon.length - 1;
+    
+    for (int i = 0; i < polygon.length; i++) {
+      if ((polygon[i].latitude > point.latitude) != (polygon[j].latitude > point.latitude) &&
+          (point.longitude < (polygon[j].longitude - polygon[i].longitude) * 
+          (point.latitude - polygon[i].latitude) / 
+          (polygon[j].latitude - polygon[i].latitude) + polygon[i].longitude)) {
+        isInside = !isInside;
+      }
+      j = i;
+    }
+    
+    return isInside;
   }
 }

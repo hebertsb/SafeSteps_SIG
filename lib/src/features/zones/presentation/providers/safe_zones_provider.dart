@@ -13,11 +13,10 @@ final safeZonesRepositoryProvider = Provider<SafeZonesRepository>((ref) {
 });
 
 class SafeZonesNotifier extends AsyncNotifier<List<SafeZone>> {
-  late final SafeZonesRepository _repository;
+  SafeZonesRepository get _repository => ref.read(safeZonesRepositoryProvider);
 
   @override
   Future<List<SafeZone>> build() async {
-    _repository = ref.read(safeZonesRepositoryProvider);
     return _repository.getSafeZones();
   }
 
@@ -28,19 +27,17 @@ class SafeZonesNotifier extends AsyncNotifier<List<SafeZone>> {
 
   Future<void> addSafeZone({
     required String name,
-    required double latitude,
-    required double longitude,
-    required int radius,
-    required int childId,
+    required String description,
+    required List<List<double>> points,
+    required List<int> childrenIds,
   }) async {
     final previousState = state;
     try {
       final newZone = await _repository.createSafeZone(
         name: name,
-        latitude: latitude,
-        longitude: longitude,
-        radius: radius,
-        childId: childId,
+        description: description,
+        points: points,
+        childrenIds: childrenIds,
       );
       if (previousState.hasValue) {
         state = AsyncValue.data([...previousState.value!, newZone]);
@@ -64,6 +61,20 @@ class SafeZonesNotifier extends AsyncNotifier<List<SafeZone>> {
       }
     } catch (e) {
       debugPrint('Error deleting safe zone: $e');
+    }
+  }
+  Future<void> updateSafeZone(String id, Map<String, dynamic> data) async {
+    final previousState = state;
+    try {
+      final updatedZone = await _repository.updateSafeZone(id, data);
+      if (previousState.hasValue) {
+        state = AsyncValue.data(
+          previousState.value!.map((zone) => zone.id == id ? updatedZone : zone).toList(),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error updating safe zone: $e');
+      throw e;
     }
   }
 }

@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 import 'shared/widgets/bottom_nav.dart';
 import 'features/map/presentation/map_screen.dart';
 import 'features/zones/presentation/zones_screen.dart';
+import 'features/zones/presentation/create_zone_screen.dart';
+import 'features/zones/presentation/edit_zone_screen.dart';
+import 'features/zones/domain/entities/safe_zone.dart';
 import 'features/profile/presentation/profile_screen.dart';
 import 'features/alerts/presentation/alerts_screen.dart';
 import 'features/auth/presentation/auth_screen.dart';
@@ -69,6 +72,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/create-child',
         builder: (context, state) => const CreateChildScreen(),
+      ),
+      GoRoute(
+        path: '/create-zone',
+        builder: (context, state) => const CreateZoneScreen(),
+      ),
+      GoRoute(
+        path: '/edit-zone',
+        builder: (context, state) {
+          final zone = state.extra as SafeZone;
+          return EditZoneScreen(zone: zone);
+        },
       ),
       
       // Main App Routes (Tutor)

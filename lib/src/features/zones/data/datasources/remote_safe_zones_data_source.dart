@@ -9,10 +9,9 @@ abstract class RemoteSafeZonesDataSource {
   Future<SafeZone> getSafeZoneById(String id);
   Future<SafeZone> createSafeZone({
     required String name,
-    required double latitude,
-    required double longitude,
-    required int radius,
-    required int childId,
+    required String description,
+    required List<List<double>> points,
+    required List<int> childrenIds,
   });
   Future<void> deleteSafeZone(String id);
   Future<SafeZone> updateSafeZone(String id, Map<String, dynamic> data);
@@ -88,16 +87,27 @@ class RemoteSafeZonesDataSourceImpl implements RemoteSafeZonesDataSource {
   @override
   Future<SafeZone> createSafeZone({
     required String name,
-    required double latitude,
-    required double longitude,
-    required int radius,
-    required int childId,
+    required String description,
+    required List<List<double>> points,
+    required List<int> childrenIds,
   }) async {
     final token = await _getToken();
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/zonas-seguras');
     
+    // Construct GeoJSON Polygon
+    // Ensure the polygon is closed (first point = last point)
+    final List<List<double>> closedPoints = List.from(points);
+    if (points.isNotEmpty && points.first != points.last) {
+      closedPoints.add(points.first);
+    }
+
+    final Map<String, dynamic> polygonGeoJSON = {
+      "type": "Polygon",
+      "coordinates": [closedPoints]
+    };
+
     try {
       final response = await client.post(
         uri,
@@ -107,10 +117,9 @@ class RemoteSafeZonesDataSourceImpl implements RemoteSafeZonesDataSource {
         },
         body: jsonEncode({
           'nombre': name,
-          'latitud': latitude,
-          'longitud': longitude,
-          'radio': radius,
-          'hijoId': childId,
+          'descripcion': description,
+          'poligono': polygonGeoJSON,
+          'hijosIds': childrenIds,
         }),
       );
 
@@ -118,7 +127,7 @@ class RemoteSafeZonesDataSourceImpl implements RemoteSafeZonesDataSource {
         final json = jsonDecode(response.body);
         return SafeZone.fromJson(json);
       } else {
-        throw Exception('Failed to create safe zone: ${response.statusCode}');
+        throw Exception('Failed to create safe zone: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
       throw Exception('Error creating safe zone: $e');

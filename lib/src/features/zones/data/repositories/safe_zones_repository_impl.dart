@@ -20,17 +20,15 @@ class SafeZonesRepositoryImpl implements SafeZonesRepository {
   @override
   Future<SafeZone> createSafeZone({
     required String name,
-    required double latitude,
-    required double longitude,
-    required int radius,
-    required int childId,
+    required String description,
+    required List<List<double>> points,
+    required List<int> childrenIds,
   }) async {
     return await _dataSource.createSafeZone(
       name: name,
-      latitude: latitude,
-      longitude: longitude,
-      radius: radius,
-      childId: childId,
+      description: description,
+      points: points,
+      childrenIds: childrenIds,
     );
   }
 

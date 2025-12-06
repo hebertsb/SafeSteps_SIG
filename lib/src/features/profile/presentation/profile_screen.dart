@@ -121,9 +121,12 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                     title: Row(
                       children: [
-                        Text(
-                          child.name,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        Flexible(
+                          child: Text(
+                            child.name,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         const SizedBox(width: 8),
                         Container(

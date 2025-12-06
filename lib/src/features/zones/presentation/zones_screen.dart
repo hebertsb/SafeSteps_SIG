@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import 'providers/safe_zones_provider.dart';
 
@@ -45,7 +46,9 @@ class ZonesScreen extends ConsumerWidget {
                 ),
                 FloatingActionButton(
                   mini: true,
-                  onPressed: () {},
+                  onPressed: () {
+                    context.push('/create-zone');
+                  },
                   child: const Icon(Icons.add),
                 ),
               ],
@@ -120,12 +123,14 @@ class ZonesScreen extends ConsumerWidget {
                             const SizedBox(height: 6),
                             Row(
                               children: [
-                                const Icon(Icons.location_on, size: 14, color: Colors.grey),
+                                const Icon(Icons.description, size: 14, color: Colors.grey),
                                 const SizedBox(width: 4),
                                 Expanded(
                                   child: Text(
-                                    zone.address,
+                                    zone.description.isNotEmpty ? zone.description : 'Sin descripción',
                                     style: const TextStyle(color: Colors.grey, fontSize: 14),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                               ],
@@ -160,18 +165,54 @@ class ZonesScreen extends ConsumerWidget {
                                   ),
                                 ),
                                 const SizedBox(width: 12),
+                                Icon(Icons.polyline, size: 14, color: Colors.grey[600]),
+                                const SizedBox(width: 4),
                                 Text(
-                                  'Radio: ${zone.radius}m',
+                                  '${zone.points.length} puntos',
                                   style: const TextStyle(color: Colors.grey, fontSize: 12),
                                 ),
                               ],
                             ),
                           ],
                         ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.more_vert, color: Colors.grey),
-                          onPressed: () {},
-                        ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit, color: Colors.blue),
+                                onPressed: () {
+                                  context.push('/edit-zone', extra: zone);
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                onPressed: () async {
+                                  final confirm = await showDialog<bool>(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      title: const Text('Eliminar Zona Segura'),
+                                      content: Text('¿Estás seguro de eliminar "${zone.name}"?\n\nEsta acción no se puede deshacer.'),
+                                      actions: [
+                                        TextButton(
+                                          child: const Text('Cancelar'),
+                                          onPressed: () => Navigator.pop(context, false),
+                                        ),
+                                        ElevatedButton(
+                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                                          onPressed: () => Navigator.pop(context, true),
+                                          child: const Text('Eliminar'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  
+                                  if (confirm == true) {
+                                    await ref.read(safeZonesProvider.notifier).deleteSafeZone(zone.id);
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
                       ),
                     );
                   },
