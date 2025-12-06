@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../domain/entities/auth_result.dart';
 
 abstract class RemoteAuthDataSource {
@@ -14,8 +15,8 @@ abstract class RemoteAuthDataSource {
 }
 
 class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
-  // Use physical device IP
-  static const _baseUrl = 'http://127.0.0.1:3000'; 
+  // Use env var or fallback to localhost
+  static String get _baseUrl => dotenv.env['API_URL'] ?? 'http://127.0.0.1:3000';
 
   final http.Client client;
 

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../../../core/services/secure_storage_service.dart';
 import '../../domain/entities/child.dart';
 
@@ -20,8 +21,8 @@ abstract class RemoteChildrenDataSource {
 }
 
 class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
-  // Use physical device IP - same as auth data source
-  static const _baseUrl = 'http://127.0.0.1:3000'; 
+  // Use env var or fallback to localhost
+  static String get _baseUrl => dotenv.env['API_URL'] ?? 'http://127.0.0.1:3000'; 
   
   final http.Client client;
 

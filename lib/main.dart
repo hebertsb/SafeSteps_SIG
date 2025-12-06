@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'src/app_router.dart';
 import 'src/core/theme/app_theme.dart';
 import 'src/features/notifications/data/services/fcm_service.dart';
@@ -9,6 +10,7 @@ import 'src/features/notifications/domain/entities/app_notification.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
   await Firebase.initializeApp();
   
   // Initialize FCM
