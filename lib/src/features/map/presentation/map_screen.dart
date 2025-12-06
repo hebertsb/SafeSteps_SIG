@@ -8,6 +8,8 @@ import 'providers/children_provider.dart';
 import '../../../core/services/socket_provider.dart';
 import '../../../core/services/secure_storage_service.dart';
 import '../domain/entities/child.dart';
+import '../../zones/presentation/providers/safe_zones_provider.dart';
+import '../../zones/domain/entities/safe_zone.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -186,11 +188,38 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     super.dispose();
   }
 
+  /// Construye la capa de polígonos para las zonas seguras
+  Widget _buildSafeZonesLayer(AsyncValue<List<SafeZone>> safeZonesAsync) {
+    return safeZonesAsync.when(
+      data: (zones) => PolygonLayer(
+        polygons: zones
+            .where((zone) => zone.points.isNotEmpty)
+            .map((zone) => Polygon(
+                  points: zone.points,
+                  color: zone.displayColor.withOpacity(0.3),
+                  borderColor: zone.displayColor,
+                  borderStrokeWidth: 2,
+                  isFilled: true,
+                  label: zone.name,
+                  labelStyle: TextStyle(
+                    color: zone.displayColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ))
+            .toList(),
+      ),
+      loading: () => PolygonLayer(polygons: <Polygon<Object>>[]),
+      error: (_, __) => PolygonLayer(polygons: <Polygon<Object>>[]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Parent View - Map with children locations
     final childrenAsync = ref.watch(childrenProvider);
     final socketService = ref.watch(socketServiceProvider);
+    final safeZonesAsync = ref.watch(safeZonesProvider);
 
     // Verificar si hay nuevos hijos para unirse a sus salas
     childrenAsync.whenData((children) {
@@ -286,6 +315,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.safesteps.safe_steps_mobile',
                     ),
+                    // Capa de zonas seguras (polígonos)
+                    _buildSafeZonesLayer(safeZonesAsync),
                     MarkerLayer(
                       markers: displayChildren.map((child) {
                         final isOffline = child.status == 'offline';
