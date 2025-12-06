@@ -3,7 +3,7 @@ class AppUser {
   final String email;
   final String name;
   final String? photoUrl;
-  final String role; // 'tutor' or 'hijo'
+  final String? type; // 'Padre' or 'Hijo'
   final List<String> childrenIds;
 
   const AppUser({
@@ -13,6 +13,7 @@ class AppUser {
     this.photoUrl,
     this.role = 'tutor', // Default to tutor
     this.childrenIds = const [],
+    this.type,
   });
 
   factory AppUser.fromFirebase(dynamic firebaseUser) {
@@ -30,8 +31,8 @@ class AppUser {
       id: json['id'].toString(),
       email: json['email'] as String,
       name: json['nombre'] as String,
-      photoUrl: null,
-      role: json['tipo'] as String? ?? 'tutor', // Map 'tipo' from backend to 'role'
+      photoUrl: null, // Backend doesn't send photoUrl yet
+      type: json['tipo'] as String?,
     );
   }
 }

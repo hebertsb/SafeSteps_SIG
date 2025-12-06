@@ -9,13 +9,12 @@ class MockChildrenRepository implements ChildrenRepository {
 
     return [
       Child(
-        id: '1',
-        name: 'Miguel',
-        email: 'miguel@example.com',
+        id: '17',
+        name: 'Hijo Uno P1',
         age: 8,
         emoji: '👦',
         phone: '+34 612 345 678',
-        device: 'iPhone 12',
+        device: 'Emulator',
         status: 'online',
         battery: 85.0,
         latitude: -17.7833, // Santa Cruz
