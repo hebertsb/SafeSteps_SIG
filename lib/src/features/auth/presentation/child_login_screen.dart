@@ -60,7 +60,7 @@ class _ChildLoginScreenState extends ConsumerState<ChildLoginScreen> {
     ref.listen<AsyncValue<AppUser?>>(authControllerProvider, (previous, next) {
       next.when(
         data: (user) {
-          if (user != null && user.role == 'hijo') {
+          if (user != null && user.type == 'hijo') {
             context.go('/child-home');
           }
         },

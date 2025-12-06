@@ -3,7 +3,7 @@ class AppUser {
   final String email;
   final String name;
   final String? photoUrl;
-  final String? type; // 'Padre' or 'Hijo'
+  final String? type; // 'tutor' or 'hijo'
   final List<String> childrenIds;
 
   const AppUser({
@@ -11,9 +11,8 @@ class AppUser {
     required this.email,
     required this.name,
     this.photoUrl,
-    this.role = 'tutor', // Default to tutor
+    this.type = 'tutor', // Default to tutor
     this.childrenIds = const [],
-    this.type,
   });
 
   factory AppUser.fromFirebase(dynamic firebaseUser) {
@@ -22,7 +21,8 @@ class AppUser {
       email: firebaseUser.email ?? '',
       name: firebaseUser.displayName ?? 'Usuario',
       photoUrl: firebaseUser.photoURL,
-      role: 'tutor', // Firebase auth usually implies tutor/parent in this context initially
+      type:
+          'tutor', // Firebase auth usually implies tutor/parent in this context initially
     );
   }
 

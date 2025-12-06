@@ -8,8 +8,6 @@ import 'src/features/notifications/data/services/fcm_service.dart';
 import 'src/features/notifications/presentation/providers/notifications_provider.dart';
 import 'src/features/notifications/domain/entities/app_notification.dart';
 
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const AppBootstrapper());
@@ -38,10 +36,10 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     try {
       setState(() => _status = 'Cargando configuración...');
       await dotenv.load(fileName: ".env");
-      
+
       setState(() => _status = 'Conectando servicios...');
       await Firebase.initializeApp();
-      
+
       setState(() => _status = 'Iniciando notificaciones...');
       _fcmService = FCMService();
       // Add timeout to prevent infinite hang
@@ -122,15 +120,13 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
       );
     }
 
-    return ProviderScope(
-      child: MyApp(fcmService: _fcmService!),
-    );
+    return ProviderScope(child: MyApp(fcmService: _fcmService!));
   }
 }
 
 class MyApp extends ConsumerStatefulWidget {
   final FCMService fcmService;
-  
+
   const MyApp({super.key, required this.fcmService});
 
   @override
@@ -141,7 +137,7 @@ class _MyAppState extends ConsumerState<MyApp> {
   @override
   void initState() {
     super.initState();
-    
+
     // Listen to FCM messages and add to notifications
     widget.fcmService.onMessage.listen((message) {
       final notification = AppNotification(
@@ -152,11 +148,11 @@ class _MyAppState extends ConsumerState<MyApp> {
         type: _getNotificationType(message.data),
         data: message.data,
       );
-      
+
       ref.read(notificationsProvider.notifier).addNotification(notification);
     });
   }
-  
+
   NotificationType _getNotificationType(Map<String, dynamic> data) {
     final type = data['type'] as String?;
     switch (type) {
@@ -176,7 +172,7 @@ class _MyAppState extends ConsumerState<MyApp> {
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
-    
+
     return MaterialApp.router(
       title: 'SafeSteps',
       theme: AppTheme.lightTheme,

@@ -67,10 +67,10 @@ class Child {
     );
   }
 
-
   Child copyWith({
     String? id,
     String? name,
+    String? email,
     int? age,
     String? emoji,
     String? phone,
@@ -84,6 +84,7 @@ class Child {
     return Child(
       id: id ?? this.id,
       name: name ?? this.name,
+      email: email ?? this.email,
       age: age ?? this.age,
       emoji: emoji ?? this.emoji,
       phone: phone ?? this.phone,

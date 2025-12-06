@@ -1,29 +1,33 @@
 import 'dart:async';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:socket_io_client/socket_io_client.dart' as io;
 
 class SocketService {
-  IO.Socket? _socket;
-  final _locationController = StreamController<Map<String, dynamic>>.broadcast();
+  io.Socket? _socket;
+  final _locationController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get locationStream => _locationController.stream;
 
   bool get isConnected => _socket?.connected ?? false;
 
   void connect(String token) {
-    final baseUrl = dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:3000';
+    final baseUrl = dotenv.env['API_URL'] ?? 'http://10.0.2.2:3000';
     print('🔌 Connecting to Socket.IO at $baseUrl');
-    
+
     if (_socket != null && _socket!.connected) {
       print('⚠️ Socket already connected');
       return;
     }
 
-    _socket = IO.io(baseUrl, IO.OptionBuilder()
-        .setTransports(['websocket'])
-        .setExtraHeaders({'Authorization': 'Bearer $token'})
-        .enableAutoConnect()
-        .build());
+    _socket = io.io(
+      baseUrl,
+      io.OptionBuilder()
+          .setTransports(['websocket'])
+          .setExtraHeaders({'Authorization': 'Bearer $token'})
+          .enableAutoConnect()
+          .build(),
+    );
 
     _socket!.onConnect((_) {
       print('✅ Socket connected successfully: ${_socket?.id}');
@@ -45,7 +49,7 @@ class SocketService {
       print('📍 Location update received via socket: $data');
       _locationController.add(Map<String, dynamic>.from(data));
     });
-    
+
     _socket!.on('joined', (data) {
       print('🚪 Joined room: $data');
     });
@@ -67,7 +71,13 @@ class SocketService {
   }
 
   // Method to simulate child sending location (for testing)
-  void emitLocationUpdate(String childId, double lat, double lng, double battery, String status) {
+  void emitLocationUpdate(
+    String childId,
+    double lat,
+    double lng,
+    double battery,
+    String status,
+  ) {
     if (_socket != null && _socket!.connected) {
       print('📤 Emitting updateLocation for $childId: $lat, $lng');
       _socket!.emit('updateLocation', {

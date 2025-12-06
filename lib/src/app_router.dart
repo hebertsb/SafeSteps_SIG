@@ -39,7 +39,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       if (isLoggedIn) {
         final user = authState.value;
-        final isChild = user?.role == 'hijo';
+        final isChild = user?.type == 'hijo';
 
         // Redirect child to child home if trying to access map or auth pages
         if (isChild && (isLoggingIn || state.matchedLocation == '/map')) {

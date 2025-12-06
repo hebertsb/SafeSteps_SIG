@@ -11,6 +11,7 @@ class MockChildrenRepository implements ChildrenRepository {
       Child(
         id: '17',
         name: 'Hijo Uno P1',
+        email: 'hijo17@example.com',
         age: 8,
         emoji: '👦',
         phone: '+34 612 345 678',
@@ -91,7 +92,7 @@ class MockChildrenRepository implements ChildrenRepository {
   }
 
   @override
-  Future<String> regenerateCode(String childId) async{
+  Future<String> regenerateCode(String childId) async {
     await Future.delayed(const Duration(milliseconds: 800));
     // Simular generación de nuevo código
     final newCode =

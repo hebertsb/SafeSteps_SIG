@@ -29,22 +29,35 @@ class AuthController extends AsyncNotifier<AppUser?> {
       );
 
       if (token != null) {
-        final userId = await SecureStorageService.instance.read(key: SecureStorageService.userIdKey);
-        final userName = await SecureStorageService.instance.read(key: SecureStorageService.userNameKey);
-        final userEmail = await SecureStorageService.instance.read(key: SecureStorageService.userEmailKey);
-        final userType = await SecureStorageService.instance.read(key: SecureStorageService.userTypeKey);
+        final userId = await SecureStorageService.instance.read(
+          key: SecureStorageService.userIdKey,
+        );
+        final userName = await SecureStorageService.instance.read(
+          key: SecureStorageService.userNameKey,
+        );
+        final userEmail = await SecureStorageService.instance.read(
+          key: SecureStorageService.userEmailKey,
+        );
+        final userType = await SecureStorageService.instance.read(
+          key: SecureStorageService.userTypeKey,
+        );
 
         if (userId != null && userName != null && userEmail != null) {
-           return AppUser(
-             id: userId, 
-             email: userEmail, 
-             name: userName, 
-             type: userType
-           );
+          return AppUser(
+            id: userId,
+            email: userEmail,
+            name: userName,
+            type: userType,
+          );
         }
-        
+
         // Fallback if data is missing but token exists (shouldn't happen ideally)
-        return AppUser(id: 'backend_user', email: 'user@backend.com', name: 'User', type: userType);
+        return AppUser(
+          id: 'backend_user',
+          email: 'user@backend.com',
+          name: 'User',
+          type: userType,
+        );
       }
       return null;
     } catch (e) {
@@ -68,12 +81,27 @@ class AuthController extends AsyncNotifier<AppUser?> {
   }
 
   Future<void> _saveUserSession(AppUser user, String token) async {
-    await SecureStorageService.instance.write(key: SecureStorageService.tokenKey, value: token);
-    await SecureStorageService.instance.write(key: SecureStorageService.userIdKey, value: user.id);
-    await SecureStorageService.instance.write(key: SecureStorageService.userNameKey, value: user.name);
-    await SecureStorageService.instance.write(key: SecureStorageService.userEmailKey, value: user.email);
+    await SecureStorageService.instance.write(
+      key: SecureStorageService.tokenKey,
+      value: token,
+    );
+    await SecureStorageService.instance.write(
+      key: SecureStorageService.userIdKey,
+      value: user.id,
+    );
+    await SecureStorageService.instance.write(
+      key: SecureStorageService.userNameKey,
+      value: user.name,
+    );
+    await SecureStorageService.instance.write(
+      key: SecureStorageService.userEmailKey,
+      value: user.email,
+    );
     if (user.type != null) {
-      await SecureStorageService.instance.write(key: SecureStorageService.userTypeKey, value: user.type!);
+      await SecureStorageService.instance.write(
+        key: SecureStorageService.userTypeKey,
+        value: user.type!,
+      );
     }
   }
 
@@ -81,8 +109,26 @@ class AuthController extends AsyncNotifier<AppUser?> {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final authRepository = ref.read(authRepositoryProvider);
-      final result = await authRepository.loginWithBackend(email: email, password: password);
-      
+      final result = await authRepository.loginWithBackend(
+        email: email,
+        password: password,
+      );
+
+      await _saveUserSession(result.user, result.accessToken);
+
+      // Sync FCM Token
+      await _syncFcmToken(result.accessToken);
+
+      return result.user;
+    });
+  }
+
+  Future<void> loginWithCode({required String code}) async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() async {
+      final authRepository = ref.read(authRepositoryProvider);
+      final result = await authRepository.loginWithCode(code: code);
+
       await _saveUserSession(result.user, result.accessToken);
 
       // Sync FCM Token
@@ -107,7 +153,7 @@ class AuthController extends AsyncNotifier<AppUser?> {
         password: password,
         type: type,
       );
-      
+
       await _saveUserSession(result.user, result.accessToken);
 
       // Sync FCM Token
