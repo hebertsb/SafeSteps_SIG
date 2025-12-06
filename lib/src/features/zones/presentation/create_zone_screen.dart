@@ -1,4 +1,4 @@
-import 'dart:math'; // For Point
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -21,7 +21,7 @@ class _CreateZoneScreenState extends ConsumerState<CreateZoneScreen> {
   final _descriptionController = TextEditingController();
   final _mapController = MapController();
   
-  List<LatLng> _polygonPoints = [];
+  final List<LatLng> _polygonPoints = [];
   final List<String> _selectedChildrenIds = [];
   bool _isLoading = false;
   
@@ -56,11 +56,7 @@ class _CreateZoneScreenState extends ConsumerState<CreateZoneScreen> {
     });
   }
 
-  void _updatePoint(int index, LatLng newPoint) {
-    setState(() {
-      _polygonPoints[index] = newPoint;
-    });
-  }
+
 
   Future<void> _showChildrenSelectionDialog(List<dynamic> children) async {
     await showDialog(
@@ -91,7 +87,7 @@ class _CreateZoneScreenState extends ConsumerState<CreateZoneScreen> {
                           }
                         });
                         // Update parent state as well to reflect changes immediately if needed
-                        this.setState(() {}); 
+                        setState(() {}); 
                       },
                     );
                   },
@@ -207,58 +203,19 @@ class _CreateZoneScreenState extends ConsumerState<CreateZoneScreen> {
                     ),
                     // Marcadores de vértices (Draggable)
                     MarkerLayer(
-                      markers: _polygonPoints.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final point = entry.value;
+                      markers: _polygonPoints.map((point) {
                         return Marker(
                           point: point,
                           width: 30,
                           height: 30,
-                          child: GestureDetector(
-                            onPanUpdate: (details) {
-                              // Convert local drag to map coordinates
-                              // This is a simplified approximation or requires mapController conversion
-                              // Since converting pixels to latlng during drag is tricky without context,
-                              // we'll try to use the mapController if possible.
-                              
-                              // Correct approach: Get the new global position, convert to LatLng
-                              final renderBox = context.findRenderObject() as RenderBox?;
-                              if (renderBox != null) {
-                                final localPosition = renderBox.globalToLocal(details.globalPosition);
-                                // We need the offset relative to the map widget, but mapController methods usually take global or local to map.
-                                // Let's try a simpler approach: 
-                                // We can't easily get the new LatLng from just the drag delta without the map projection.
-                                // However, we can use the mapController to get the center and calculate offset? No.
-                                
-                                // Best effort: Use the camera to convert screen point to LatLng
-                                // Note: This requires the tap position relative to the screen/map.
-                                // details.globalPosition gives us the screen coordinate.
-                                final newLatLng = _mapController.camera.pointToLatLng(
-                                  Point(details.globalPosition.dx, details.globalPosition.dy - kToolbarHeight - MediaQuery.of(context).padding.top) 
-                                  // Adjusting for app bar and status bar is flaky. 
-                                  // Better: use a transparent overlay for drag? 
-                                  // For now, let's just allow tapping to remove or simple drag if we can.
-                                );
-                                // Actually, pointToLatLng takes a Point relative to the map widget's top-left.
-                                // We need to find the map's render box.
-                              }
-                            },
-                            // Fallback: Just a visual marker for now, maybe tap to remove?
-                            onTap: () {
-                              // Optional: Remove point on tap?
-                              // setState(() {
-                              //   _polygonPoints.removeAt(index);
-                              // });
-                            },
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.blue,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 2),
-                                boxShadow: const [BoxShadow(blurRadius: 2, color: Colors.black26)],
-                              ),
-                              child: const Icon(Icons.drag_handle, size: 16, color: Colors.white),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.blue,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: const [BoxShadow(blurRadius: 2, color: Colors.black26)],
                             ),
+                            child: const Icon(Icons.drag_handle, size: 16, color: Colors.white),
                           ),
                         );
                       }).toList(),

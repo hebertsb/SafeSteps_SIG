@@ -1,5 +1,6 @@
 import '../../domain/entities/safe_zone.dart';
 import '../../domain/repositories/safe_zones_repository.dart';
+import 'package:latlong2/latlong.dart';
 
 class MockSafeZonesRepository implements SafeZonesRepository {
   @override
@@ -9,10 +10,13 @@ class MockSafeZonesRepository implements SafeZonesRepository {
       SafeZone(
         id: '1',
         name: 'Casa',
-        address: 'Av. Las Américas 123',
-        latitude: -17.7833,
-        longitude: -63.1821,
-        radius: 100,
+        description: 'Av. Las Américas 123',
+        points: const [
+          LatLng(-17.7833, -63.1821),
+          LatLng(-17.7834, -63.1821),
+          LatLng(-17.7834, -63.1822),
+          LatLng(-17.7833, -63.1822),
+        ],
         color: ZoneColor.primary,
         icon: ZoneIcon.home,
         status: 'active',
@@ -20,10 +24,13 @@ class MockSafeZonesRepository implements SafeZonesRepository {
       SafeZone(
         id: '2',
         name: 'Colegio',
-        address: 'Calle 24 de Septiembre',
-        latitude: -17.7900,
-        longitude: -63.1900,
-        radius: 200,
+        description: 'Calle 24 de Septiembre',
+        points: const [
+          LatLng(-17.7900, -63.1900),
+          LatLng(-17.7901, -63.1900),
+          LatLng(-17.7901, -63.1901),
+          LatLng(-17.7900, -63.1901),
+        ],
         color: ZoneColor.secondary,
         icon: ZoneIcon.school,
         status: 'active',
@@ -40,10 +47,9 @@ class MockSafeZonesRepository implements SafeZonesRepository {
   @override
   Future<SafeZone> createSafeZone({
     required String name,
-    required double latitude,
-    required double longitude,
-    required int radius,
-    required int childId,
+    required String description,
+    required List<List<double>> points,
+    required List<int> childrenIds,
   }) async {
     await Future.delayed(const Duration(milliseconds: 500));
     return (await getSafeZones()).first;

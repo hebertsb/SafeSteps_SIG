@@ -1,6 +1,7 @@
 import 'dart:developer';
 import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 // Background message handler (must be top-level function)
 @pragma('vm:entry-point')

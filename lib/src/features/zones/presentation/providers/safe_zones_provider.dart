@@ -74,7 +74,7 @@ class SafeZonesNotifier extends AsyncNotifier<List<SafeZone>> {
       }
     } catch (e) {
       debugPrint('Error updating safe zone: $e');
-      throw e;
+      rethrow;
     }
   }
 }
