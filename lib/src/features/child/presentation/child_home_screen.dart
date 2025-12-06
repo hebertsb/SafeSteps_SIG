@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/services/socket_provider.dart';
 import '../../../core/services/secure_storage_service.dart';
+import '../../../core/services/background_location_service.dart';
 import '../../auth/presentation/providers/auth_provider.dart';
 
 class ChildHomeScreen extends ConsumerStatefulWidget {
@@ -18,6 +20,7 @@ class ChildHomeScreen extends ConsumerStatefulWidget {
 class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
   bool _isTracking = false;
   bool _isInitialized = false;
+  bool _isBackgroundServiceRunning = false;
   StreamSubscription<Position>? _positionSubscription;
   String _lastLocationStatus = 'Iniciando...';
   double? _lastLat;
@@ -57,6 +60,10 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
     // Notificar al servidor que el hijo se va offline ANTES de desconectar
     final socketService = ref.read(socketServiceProvider);
     socketService.emitChildOffline();
+    
+    // Stop background service
+    await BackgroundLocationService.instance.stopService();
+    _isBackgroundServiceRunning = false;
     
     // Esperar un momento para que el mensaje se envíe
     await Future.delayed(const Duration(milliseconds: 300));
@@ -103,6 +110,17 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
       return;
     }
 
+    // Request background location permission (Android 10+)
+    if (await Permission.locationAlways.isDenied) {
+      setState(() => _lastLocationStatus = 'Solicitando permiso de segundo plano...');
+      final bgStatus = await Permission.locationAlways.request();
+      if (bgStatus.isDenied || bgStatus.isPermanentlyDenied) {
+        print('⚠️ Background location permission denied, continuing with foreground only');
+      } else {
+        print('✅ Background location permission granted');
+      }
+    }
+
     // Check if location services are enabled
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
@@ -138,16 +156,16 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
           
           // Verificar que coinciden
           if (jwtUserId != childId) {
-            print('❌ ERROR: JWT ID ($jwtUserId) NO coincide con Provider ID ($childId)!');
-            print('❌ El token es de otro usuario. Cerrando sesión...');
+            print(' ERROR: JWT ID ($jwtUserId) NO coincide con Provider ID ($childId)!');
+            print(' El token es de otro usuario. Cerrando sesión...');
             setState(() => _lastLocationStatus = 'Error: Sesión inválida. Por favor, vuelve a iniciar sesión.');
             // Forzar logout
             await ref.read(authControllerProvider.notifier).logout();
             return;
           }
-          print('✅ JWT ID coincide con Provider ID');
+          print(' JWT ID coincide con Provider ID');
         } catch (e) {
-          print('⚠️ Could not decode JWT: $e');
+          print(' Could not decode JWT: $e');
         }
       }
 
@@ -180,6 +198,22 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
         });
       }
 
+      // Start background service for when app is closed
+      // First initialize (creates notification channel), then start
+      try {
+        await BackgroundLocationService.instance.initialize();
+        final bgServiceStarted = await BackgroundLocationService.instance.startService(token);
+        if (bgServiceStarted) {
+          print(' Background location service started');
+          _isBackgroundServiceRunning = true;
+        } else {
+          print(' Could not start background location service');
+        }
+      } catch (e) {
+        print(' Background service error: $e');
+        // Continue without background service - foreground tracking still works
+      }
+
       // Cancelar cualquier subscription anterior antes de crear una nueva
       await _positionSubscription?.cancel();
       _positionSubscription = null;
@@ -199,11 +233,11 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
         (Position position) {
           // CRÍTICO: Verificar que seguimos siendo el mismo hijo
           if (_currentChildId != expectedChildId || !_isTracking) {
-            print('⚠️ Ignoring location update - child changed or tracking stopped');
+            print(' Ignoring location update - child changed or tracking stopped');
             return;
           }
           
-          print('📍 Real-time Location for child $expectedChildId: ${position.latitude}, ${position.longitude}');
+          print(' Real-time Location for child $expectedChildId: ${position.latitude}, ${position.longitude}');
           
           // El backend obtiene el childId del JWT, no necesitamos enviarlo
           socketService.emitLocationUpdate(
@@ -220,7 +254,7 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
           });
         },
         onError: (error) {
-          print('❌ Location stream error: $error');
+          print(' Location stream error: $error');
           if (_lastLat == null) {
             _safeSetState(() => _lastLocationStatus = 'Error de GPS');
           }
@@ -228,7 +262,7 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
       );
 
     } catch (e, stack) {
-      print('❌ Error in _startLocationTracking: $e');
+      print(' Error in _startLocationTracking: $e');
       print(stack);
       if (mounted) {
         setState(() => _lastLocationStatus = 'Error: $e');
@@ -298,7 +332,7 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
-              print('🚪 Logging out child: $_currentChildId');
+              print(' Logging out child: $_currentChildId');
               await _cleanup();
               await ref.read(authControllerProvider.notifier).logout();
             },
