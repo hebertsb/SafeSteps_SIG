@@ -7,15 +7,17 @@ import 'features/map/presentation/map_screen.dart';
 import 'features/zones/presentation/zones_screen.dart';
 import 'features/profile/presentation/profile_screen.dart';
 import 'features/alerts/presentation/alerts_screen.dart';
-import 'features/auth/presentation/login_screen.dart';
-import 'features/auth/presentation/register_screen.dart';
+import 'features/auth/presentation/auth_screen.dart';
+import 'features/auth/presentation/child_login_screen.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
+import 'features/profile/presentation/create_child_screen.dart';
+import 'features/child/presentation/child_home_screen.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
-  
+
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/map',
@@ -24,30 +26,54 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ),
     redirect: (context, state) {
       final isLoggedIn = authState.value != null;
-      final isLoggingIn = state.matchedLocation == '/login' || state.matchedLocation == '/register';
-      
+      final isLoggingIn =
+          state.matchedLocation == '/login' ||
+          state.matchedLocation == '/register' ||
+          state.matchedLocation == '/child-login';
+
       if (!isLoggedIn && !isLoggingIn) {
         return '/login';
       }
-      
-      if (isLoggedIn && isLoggingIn) {
-        return '/map';
+
+      if (isLoggedIn) {
+        final user = authState.value;
+        final isChild = user?.role == 'hijo';
+
+        // Redirect child to child home if trying to access map or auth pages
+        if (isChild && (isLoggingIn || state.matchedLocation == '/map')) {
+          return '/child-home';
+        }
+
+        // Redirect tutor to map if trying to access auth pages
+        if (!isChild && isLoggingIn) {
+          return '/map';
+        }
       }
-      
+
       return null;
     },
     routes: [
       // Auth Routes
+      GoRoute(path: '/login', builder: (context, state) => const AuthScreen()),
       GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginScreen(),
+        path: '/child-login',
+        builder: (context, state) => const ChildLoginScreen(),
       ),
+      GoRoute(path: '/register', redirect: (context, state) => '/login'),
+
+      // Child Routes
       GoRoute(
-        path: '/register',
-        builder: (context, state) => const RegisterScreen(),
+        path: '/child-home',
+        builder: (context, state) => const ChildHomeScreen(),
       ),
-      
-      // Main App Routes
+
+      // Tutor Routes
+      GoRoute(
+        path: '/create-child',
+        builder: (context, state) => const CreateChildScreen(),
+      ),
+
+      // Main App Routes (Tutor)
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           return BottomNavBar(navigationShell: navigationShell);
@@ -99,9 +125,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Stream<dynamic> stream) {
     notifyListeners();
-    _subscription = stream.asBroadcastStream().listen(
-      (_) => notifyListeners(),
-    );
+    _subscription = stream.asBroadcastStream().listen((_) => notifyListeners());
   }
 
   late final StreamSubscription<dynamic> _subscription;

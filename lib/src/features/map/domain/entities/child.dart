@@ -1,6 +1,9 @@
+import 'tutor.dart';
+
 class Child {
   final String id;
   final String name;
+  final String email;
   final int age;
   final String emoji;
   final String phone;
@@ -10,35 +13,44 @@ class Child {
   final double latitude;
   final double longitude;
   final DateTime lastUpdated;
+  final List<Tutor> tutors;
 
   Child({
     required this.id,
     required this.name,
-    required this.age,
-    required this.emoji,
-    required this.phone,
-    required this.device,
-    required this.status,
-    required this.battery,
+    required this.email,
+    this.age = 0,
+    this.emoji = '👤',
+    this.phone = '',
+    this.device = 'Unknown',
+    this.status = 'offline',
+    this.battery = 0.0,
     required this.latitude,
     required this.longitude,
     required this.lastUpdated,
+    this.tutors = const [],
   });
 
   // Factory for creating from JSON (useful later for API)
   factory Child.fromJson(Map<String, dynamic> json) {
     return Child(
-      id: json['id'],
-      name: json['name'],
-      age: json['age'],
-      emoji: json['emoji'],
-      phone: json['phone'],
-      device: json['device'],
-      status: json['status'],
-      battery: (json['battery'] as num).toDouble(),
-      latitude: (json['latitude'] as num).toDouble(),
-      longitude: (json['longitude'] as num).toDouble(),
-      lastUpdated: DateTime.parse(json['lastUpdated']),
+      id: json['id'].toString(),
+      name: json['nombre'] ?? json['name'] ?? 'Unknown',
+      email: json['email'] ?? '',
+      age: json['age'] ?? 0,
+      emoji: json['emoji'] ?? '👤',
+      phone: json['phone']?.toString() ?? '',
+      device: json['device'] ?? 'Unknown',
+      status: json['status'] ?? 'offline',
+      battery: (json['battery'] as num?)?.toDouble() ?? 0.0,
+      latitude: (json['latitud'] as num?)?.toDouble() ?? (json['latitude'] as num?)?.toDouble() ?? 0.0,
+      longitude: (json['longitud'] as num?)?.toDouble() ?? (json['longitude'] as num?)?.toDouble() ?? 0.0,
+      lastUpdated: json['ultimaconexion'] != null 
+          ? DateTime.parse(json['ultimaconexion']) 
+          : (json['lastUpdated'] != null ? DateTime.parse(json['lastUpdated']) : DateTime.now()),
+      tutors: (json['tutores'] as List<dynamic>?)
+          ?.map((t) => Tutor.fromJson(t))
+          .toList() ?? [],
     );
   }
 

@@ -50,11 +50,11 @@ class AuthRepository {
         email: email,
         password: password,
       );
-      
+
       // Update display name
       await credential.user!.updateDisplayName(name);
       await credential.user!.reload();
-      
+
       return AppUser.fromFirebase(_firebaseAuth.currentUser!);
     } on FirebaseAuthException catch (e) {
       throw _handleAuthException(e);
@@ -67,13 +67,16 @@ class AuthRepository {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) return null;
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      final userCredential = await _firebaseAuth.signInWithCredential(credential);
+      final userCredential = await _firebaseAuth.signInWithCredential(
+        credential,
+      );
       return AppUser.fromFirebase(userCredential.user!);
     } catch (e) {
       throw 'Error al iniciar sesión con Google';
@@ -82,10 +85,7 @@ class AuthRepository {
 
   // Sign out
   Future<void> signOut() async {
-    await Future.wait([
-      _firebaseAuth.signOut(),
-      _googleSignIn.signOut(),
-    ]);
+    await Future.wait([_firebaseAuth.signOut(), _googleSignIn.signOut()]);
   }
 
   // Reset password
@@ -104,6 +104,12 @@ class AuthRepository {
   }) async {
     final remoteDataSource = RemoteAuthDataSourceImpl();
     return await remoteDataSource.login(email: email, password: password);
+  }
+
+  // Backend Login with Code (for children)
+  Future<AuthResult> loginWithCode({required String code}) async {
+    final remoteDataSource = RemoteAuthDataSourceImpl();
+    return await remoteDataSource.loginWithCode(code: code);
   }
 
   // Backend Register

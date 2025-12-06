@@ -36,6 +36,48 @@ class AppNotification {
       isRead: isRead ?? this.isRead,
     );
   }
+
+  factory AppNotification.fromJson(Map<String, dynamic> json) {
+    return AppNotification(
+      id: json['id'].toString(),
+      title: _getTitleFromType(json['tipo'] ?? 'info'),
+      body: json['mensaje'] ?? '',
+      timestamp: DateTime.parse(json['createdAt']),
+      type: _getTypeFromString(json['tipo'] ?? 'info'),
+      isRead: json['leida'] ?? false,
+      data: json,
+    );
+  }
+
+  static String _getTitleFromType(String type) {
+    switch (type) {
+      case 'alert':
+        return 'Alerta de Seguridad';
+      case 'zone_entry':
+        return 'Entrada a Zona';
+      case 'zone_exit':
+        return 'Salida de Zona';
+      case 'low_battery':
+        return 'Batería Baja';
+      default:
+        return 'Notificación';
+    }
+  }
+
+  static NotificationType _getTypeFromString(String type) {
+    switch (type) {
+      case 'zone_entry':
+        return NotificationType.zoneEntry;
+      case 'zone_exit':
+        return NotificationType.zoneExit;
+      case 'low_battery':
+        return NotificationType.lowBattery;
+      case 'alert':
+        return NotificationType.alert;
+      default:
+        return NotificationType.general;
+    }
+  }
 }
 
 enum NotificationType {

@@ -11,6 +11,7 @@ class AppUser {
     required this.email,
     required this.name,
     this.photoUrl,
+    this.role = 'tutor', // Default to tutor
     this.childrenIds = const [],
     this.type,
   });
@@ -21,6 +22,7 @@ class AppUser {
       email: firebaseUser.email ?? '',
       name: firebaseUser.displayName ?? 'Usuario',
       photoUrl: firebaseUser.photoURL,
+      role: 'tutor', // Firebase auth usually implies tutor/parent in this context initially
     );
   }
 

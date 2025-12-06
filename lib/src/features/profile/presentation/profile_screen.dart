@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../map/presentation/providers/children_provider.dart';
 import '../../auth/presentation/providers/auth_provider.dart';
@@ -84,7 +85,9 @@ class ProfileScreen extends ConsumerWidget {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 OutlinedButton.icon(
-                  onPressed: () {},
+                  onPressed: () {
+                    context.push('/create-child');
+                  },
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('Agregar'),
                   style: OutlinedButton.styleFrom(

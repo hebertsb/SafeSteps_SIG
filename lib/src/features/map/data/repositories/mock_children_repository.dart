@@ -33,4 +33,51 @@ class MockChildrenRepository implements ChildrenRepository {
       return null;
     }
   }
+
+
+  @override
+  Future<Child> createChild({
+    required String name,
+    required String email,
+    required String password,
+    double? latitude,
+    double? longitude,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 800));
+    return Child(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      name: name,
+      email: email,
+      age: 0,
+      emoji: '👶',
+      phone: '',
+      device: 'Unknown',
+      status: 'offline',
+      battery: 100.0,
+      latitude: latitude ?? 0.0,
+      longitude: longitude ?? 0.0,
+      lastUpdated: DateTime.now(),
+    );
+  }
+  @override
+  Future<void> deleteChild(String id) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+  }
+
+  @override
+  Future<Child> updateChild(String id, Map<String, dynamic> data) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    return (await getChildren()).first;
+  }
+
+  @override
+  Future<Child> updateChildLocation(String id, double latitude, double longitude) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    return (await getChildren()).first;
+  }
+
+  @override
+  Future<void> removeChildFromTutor(String tutorId, String childId) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+  }
 }
