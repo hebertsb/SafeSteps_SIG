@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../../../core/services/secure_storage_service.dart';
 import '../../domain/entities/safe_zone.dart';
 
@@ -18,9 +19,14 @@ abstract class RemoteSafeZonesDataSource {
 }
 
 class RemoteSafeZonesDataSourceImpl implements RemoteSafeZonesDataSource {
+<<<<<<< HEAD
   // Backend URL - Tu PC WiFi IP
   // Para dispositivo físico o iOS simulator: usa 192.168.0.8:3000
   static const _baseUrl = 'http://192.168.0.8:3000';
+=======
+  // Use env var or fallback to localhost
+  static String get _baseUrl => dotenv.env['API_URL'] ?? 'http://127.0.0.1:3000'; 
+>>>>>>> 39a4014fdb5c1b44b0732d23ca75cbc1b91bb01e
   
   final http.Client client;
 
