@@ -150,6 +150,35 @@ class _MyAppState extends ConsumerState<MyApp> {
       );
 
       ref.read(notificationsProvider.notifier).addNotification(notification);
+
+      // Show SnackBar for foreground notifications
+      if (mounted && message.notification != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  message.notification!.title ?? 'Notificación',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(message.notification!.body ?? ''),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'VER',
+              textColor: Colors.white,
+              onPressed: () {
+                // Navigate to notifications screen if needed
+                // context.push('/notifications');
+              },
+            ),
+          ),
+        );
+      }
     });
   }
 

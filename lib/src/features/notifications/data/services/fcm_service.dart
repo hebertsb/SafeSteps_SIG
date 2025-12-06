@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 // Background message handler (must be top-level function)
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
   log('Handling background message: ${message.messageId}');
 }
 

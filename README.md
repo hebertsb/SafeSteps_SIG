@@ -1,54 +1,50 @@
 # SafeSteps Mobile 📱
 
-Aplicación móvil Flutter para el seguimiento y seguridad de niños mediante geolocalización en tiempo real.
+Aplicación móvil Flutter para el seguimiento y seguridad de niños mediante geolocalización en tiempo real y zonas seguras con polígonos.
 
 ## 🌟 Características
 
-### ✅ Autenticación
-- Login con email/contraseña
-- Registro de nuevos usuarios
-- Inicio de sesión con Google
-- Gestión de sesiones con Firebase Auth
+### ✅ Autenticación y Roles
+- **Login de Tutores**: Acceso completo para gestionar hijos y zonas.
+- **Login de Hijos**: Acceso simplificado mediante código de vinculación.
+- **Roles Diferenciados**: Interfaces adaptadas para Tutor (Mapa, Gestión) e Hijo (Botón de Pánico, Estado).
+- **Gestión de Sesiones**: Persistencia segura de tokens JWT.
 
 ### 📍 Seguimiento en Tiempo Real
-- Visualización de ubicación de niños en mapa interactivo
-- Indicador de batería en cada marcador
-- Historial de ubicaciones recientes
+- **Rastreo GPS**: Envío constante de la ubicación del niño al backend.
+- **WebSockets**: Actualización en tiempo real en el mapa del tutor.
+- **Estado del Dispositivo**: Monitoreo de nivel de batería y estado (En movimiento, Quieto).
+- **Mapa Interactivo**: Visualización precisa con `flutter_map` y OpenStreetMap.
 
-### 🛡️ Zonas Seguras
-- Creación y gestión de zonas seguras
-- Alertas al entrar/salir de zonas
-- Visualización de zonas en el mapa
+### 🛡️ Zonas Seguras Avanzadas
+- **Geofencing Poligonal**: Creación de zonas seguras con formas personalizadas (no solo círculos).
+- **Detección Automática**: El backend (PostGIS) detecta automáticamente entradas y salidas.
+- **Gestión Visual**: Dibujado de zonas directamente sobre el mapa.
 
-### 🔔 Notificaciones Push
-- Alertas en tiempo real con Firebase Cloud Messaging
-- Notificaciones de entrada/salida de zonas
-- Alertas de batería baja
-- Historial de notificaciones en la app
-
-### 👤 Perfil de Usuario
-- Gestión de información personal
-- Lista de niños vinculados
-- Configuración de la cuenta
-- Cerrar sesión
+### 🔔 Notificaciones Inteligentes
+- **Alertas Push**: Notificaciones inmediatas vía Firebase Cloud Messaging (FCM).
+- **Eventos Críticos**: Entrada/Salida de zonas seguras, batería baja, botón de pánico.
+- **Feedback Visual**: SnackBars en primer plano y notificaciones en segundo plano.
 
 ## 🛠️ Tecnologías
 
-- **Framework**: Flutter 3.9+
-- **Lenguaje**: Dart
-- **Estado**: Riverpod 3.0
-- **Navegación**: GoRouter 17.0
-- **Backend**: Firebase (Auth, Firestore, Cloud Messaging)
-- **Mapas**: flutter_map + OpenStreetMap
-- **HTTP**: Dio
+- **Frontend**: Flutter 3.9+ (Dart)
+- **Gestión de Estado**: Riverpod 3.0 (AsyncNotifier)
+- **Mapas**: flutter_map, latlong2, OpenStreetMap
+- **Backend Communication**: 
+  - **HTTP**: Dio / http
+  - **Real-time**: Socket.IO Client
+- **Servicios**:
+  - **Firebase**: Cloud Messaging (FCM), Core
+  - **Geolocalización**: Geolocator
+  - **Almacenamiento**: Flutter Secure Storage
 
 ## 📋 Requisitos Previos
 
 - Flutter SDK 3.9.2 o superior
 - Dart SDK 3.9.2 o superior
-- Android Studio / VS Code
-- Cuenta de Firebase
-- Dispositivo Android (minSdk 21) o emulador
+- Cuenta de Firebase configurada
+- Backend de SafeSteps (NestJS + PostGIS) en ejecución
 
 ## 🚀 Instalación
 
@@ -63,19 +59,18 @@ cd safe_steps_mobile
 flutter pub get
 ```
 
-### 3. Configurar Firebase
+### 3. Configurar Variables de Entorno
+Crea un archivo `.env` en la raíz del proyecto:
+```env
+API_URL=http://<TU_IP_LOCAL>:3000
+```
+*Nota: Para emulador Android usa `10.0.2.2`, para dispositivo físico usa la IP de tu PC.*
 
-#### Android
-1. Crea un proyecto en [Firebase Console](https://console.firebase.google.com/)
-2. Agrega una app Android con el package name: `com.safesteps.safe_steps_mobile`
-3. Descarga `google-services.json`
-4. Coloca el archivo en `android/app/google-services.json`
-5. Habilita Authentication (Email/Password y Google Sign-In)
-6. Habilita Cloud Messaging
+### 4. Configurar Firebase
+1. Coloca el archivo `google-services.json` en `android/app/`.
+2. Asegúrate de que el package name coincida: `com.safesteps.safe_steps_mobile`.
 
-**⚠️ IMPORTANTE**: El archivo `google-services.json` NO debe subirse a Git (ya está en .gitignore)
-
-### 4. Ejecutar la aplicación
+### 5. Ejecutar la aplicación
 ```bash
 flutter run
 ```
@@ -84,60 +79,34 @@ flutter run
 
 ```
 lib/
-├── main.dart                          # Punto de entrada
+├── main.dart                          # Punto de entrada y configuración global
 ├── src/
-│   ├── app_router.dart               # Configuración de rutas
+│   ├── app_router.dart               # Rutas (GoRouter)
 │   ├── core/
-│   │   └── theme/                    # Temas y colores
+│   │   ├── providers/                # Providers globales (Location, Socket)
+│   │   ├── services/                 # Servicios base (Storage, API)
+│   │   └── theme/                    # Estilos y temas
 │   └── features/
-│       ├── auth/                     # Autenticación
-│       ├── map/                      # Mapa y ubicaciones
-│       ├── zones/                    # Zonas seguras
-│       ├── alerts/                   # Alertas y notificaciones
-│       ├── profile/                  # Perfil de usuario
-│       └── notifications/            # Push notifications
+│       ├── auth/                     # Login, Registro, Roles
+│       ├── child/                    # Pantalla y lógica modo Hijo
+│       ├── map/                      # Mapa principal, marcadores
+│       ├── zones/                    # Gestión de zonas seguras
+│       ├── notifications/            # Servicio FCM y lista de alertas
+│       └── profile/                  # Perfil de usuario y gestión de hijos
 ```
-
-## 🔐 Variables de Entorno
-
-Los siguientes archivos contienen información sensible y NO deben subirse a Git:
-
-- `android/app/google-services.json` - Configuración de Firebase
-- `ios/Runner/GoogleService-Info.plist` - Configuración de Firebase (iOS)
-- Cualquier archivo con API keys o secrets
 
 ## 🧪 Testing
 
-### Probar Autenticación
-1. Ejecuta la app
-2. Regístrate con un email y contraseña
-3. Inicia sesión
-4. Prueba el inicio de sesión con Google
+### Probar Rastreo en Tiempo Real
+1. Inicia sesión como **Hijo** en un dispositivo (o emulador A).
+2. Inicia sesión como **Tutor** en otro dispositivo (o emulador B).
+3. En el dispositivo Hijo, asegúrate de que el GPS esté activo.
+4. En el dispositivo Tutor, verás el marcador del hijo moverse en tiempo real.
 
-### Probar Notificaciones Push
-1. Busca el FCM Token en la consola (se imprime al iniciar)
-2. Ve a Firebase Console → Cloud Messaging
-3. Envía una notificación de prueba con tu token
-4. Verifica que aparezca en la pantalla de Alertas
-
-## 📝 Notas de Desarrollo
-
-### Arquitectura
-El proyecto sigue Clean Architecture con tres capas:
-- **Presentation**: UI y providers de Riverpod
-- **Domain**: Entidades y casos de uso
-- **Data**: Repositorios y servicios
-
-### Estado
-Se usa Riverpod 3.x con la nueva API de `Notifier` en lugar de `StateNotifier`.
-
-### Mapas
-Se usa `flutter_map` con tiles de OpenStreetMap en lugar de Google Maps para evitar problemas de renderizado en Android.
-
-## 🐛 Problemas Conocidos
-
-- `flutter_local_notifications` temporalmente deshabilitado por problemas de compilación
-- Las notificaciones funcionan correctamente con FCM nativo
+### Probar Zonas Seguras
+1. Como Tutor, ve a "Crear Zona" y dibuja un polígono en el mapa.
+2. Mueve al Hijo (físicamente o simulando GPS) dentro del polígono.
+3. El Tutor recibirá una notificación push: "El hijo ha entrado a la zona segura".
 
 ## 📄 Licencia
 
@@ -146,13 +115,3 @@ Este proyecto es parte de un trabajo universitario de la Universidad Autónoma G
 ## 👥 Autores
 
 - Hebert Suarez - Sistema de Información Geográfica
--  - Sistema de Información Geográfica
--  - Sistema de Información Geográfica
--  - Sistema de Información Geográfica
--  - Sistema de Información Geográfica
-
-## 🙏 Agradecimientos
-
-- Firebase por los servicios de backend
-- OpenStreetMap por los tiles del mapa
-- La comunidad de Flutter
