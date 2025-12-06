@@ -81,6 +81,12 @@ class AuthController extends AsyncNotifier<AppUser?> {
   }
 
   Future<void> _saveUserSession(AppUser user, String token) async {
+    // IMPORTANTE: Limpiar toda la sesión anterior antes de guardar la nueva
+    // Esto evita que datos del usuario anterior se mezclen
+    await SecureStorageService.instance.deleteAll();
+    
+    print('💾 Saving new session for user: ${user.name} (ID: ${user.id}, Type: ${user.type})');
+    
     await SecureStorageService.instance.write(
       key: SecureStorageService.tokenKey,
       value: token,
