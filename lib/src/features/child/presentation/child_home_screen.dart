@@ -1,8 +1,12 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/services/socket_provider.dart';
+import '../../../core/services/secure_storage_service.dart';
 import '../../auth/presentation/providers/auth_provider.dart';
-import '../../../core/providers/location_provider.dart';
 
 class ChildHomeScreen extends ConsumerStatefulWidget {
   const ChildHomeScreen({super.key});
@@ -12,26 +16,254 @@ class ChildHomeScreen extends ConsumerStatefulWidget {
 }
 
 class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
+  bool _isTracking = false;
+  bool _isInitialized = false;
+  StreamSubscription<Position>? _positionSubscription;
+  String _lastLocationStatus = 'Iniciando...';
+  double? _lastLat;
+  double? _lastLng;
+  DateTime? _lastUIUpdate;
+  String? _currentChildId; // Track which child this instance is for
+
   @override
   void initState() {
     super.initState();
-    // Start tracking when screen loads
+    // Defer initialization to avoid issues during widget build
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(locationTrackingProvider.notifier).startTracking();
+      if (!_isInitialized) {
+        _isInitialized = true;
+        _startLocationTracking();
+      }
     });
+  }
+  
+  void _safeSetState(VoidCallback fn) {
+    if (mounted) {
+      // Throttle UI updates to max 1 per second
+      final now = DateTime.now();
+      if (_lastUIUpdate == null || now.difference(_lastUIUpdate!).inMilliseconds > 1000) {
+        _lastUIUpdate = now;
+        setState(fn);
+      }
+    }
+  }
+
+  Future<void> _cleanup() async {
+    print('🧹 Cleaning up child home screen for child: $_currentChildId');
+    _isTracking = false;
+    await _positionSubscription?.cancel();
+    _positionSubscription = null;
+    
+    // Notificar al servidor que el hijo se va offline ANTES de desconectar
+    final socketService = ref.read(socketServiceProvider);
+    socketService.emitChildOffline();
+    
+    // Esperar un momento para que el mensaje se envíe
+    await Future.delayed(const Duration(milliseconds: 300));
+    
+    socketService.disconnect();
   }
 
   @override
   void dispose() {
-    // Stop tracking is handled by provider dispose, but we can be explicit if needed
-    // ref.read(locationTrackingProvider.notifier).stopTracking();
+    print('🗑️ Disposing child home screen for child: $_currentChildId');
+    _positionSubscription?.cancel();
+    _positionSubscription = null;
     super.dispose();
+  }
+
+  Future<void> _startLocationTracking() async {
+    final user = ref.read(currentUserProvider);
+    if (user == null) {
+      setState(() => _lastLocationStatus = 'Error: Usuario no encontrado');
+      return;
+    }
+
+    final childId = user.id;
+    print('DEBUG: ===== CHILD HOME SCREEN =====');
+    print('DEBUG: User ID from provider: $childId');
+    print('DEBUG: User Name: ${user.name}');
+    print('DEBUG: User Email: ${user.email}');
+    print('DEBUG: User Type: ${user.type}');
+    print('DEBUG: Starting real-time location tracking for child: $childId');
+
+    // 1. Check/Request permissions
+    LocationPermission permission = await Geolocator.checkPermission();
+    
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        setState(() => _lastLocationStatus = 'Permiso de ubicación denegado');
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      setState(() => _lastLocationStatus = 'Permiso denegado permanentemente');
+      return;
+    }
+
+    // Check if location services are enabled
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      setState(() => _lastLocationStatus = 'GPS desactivado');
+      return;
+    }
+
+    try {
+      // 2. Connect socket
+      final socketService = ref.read(socketServiceProvider);
+      final token = await SecureStorageService.instance.read(key: SecureStorageService.tokenKey);
+      
+      if (token == null) {
+        setState(() => _lastLocationStatus = 'Error: No hay token');
+        return;
+      }
+      
+      // CRÍTICO: Verificar que el token JWT corresponde al usuario correcto
+      String? jwtUserId;
+      final parts = token.split('.');
+      if (parts.length == 3) {
+        final payload = parts[1];
+        final normalized = base64Url.normalize(payload);
+        try {
+          final decoded = utf8.decode(base64Url.decode(normalized));
+          print('🔑 JWT Payload: $decoded');
+          
+          // Extraer el ID del JWT
+          final jsonPayload = jsonDecode(decoded);
+          jwtUserId = jsonPayload['sub'].toString();
+          print('🔑 JWT User ID (sub): $jwtUserId');
+          print('🔑 Provider User ID: $childId');
+          
+          // Verificar que coinciden
+          if (jwtUserId != childId) {
+            print('❌ ERROR: JWT ID ($jwtUserId) NO coincide con Provider ID ($childId)!');
+            print('❌ El token es de otro usuario. Cerrando sesión...');
+            setState(() => _lastLocationStatus = 'Error: Sesión inválida. Por favor, vuelve a iniciar sesión.');
+            // Forzar logout
+            await ref.read(authControllerProvider.notifier).logout();
+            return;
+          }
+          print('✅ JWT ID coincide con Provider ID');
+        } catch (e) {
+          print('⚠️ Could not decode JWT: $e');
+        }
+      }
+
+      // Guardar el childId actual para esta instancia
+      _currentChildId = childId;
+
+      // Desconectar cualquier socket anterior y conectar con el nuevo token
+      socketService.disconnect();
+      await Future.delayed(const Duration(milliseconds: 500));
+      socketService.connect(token);
+      
+      // Wait for connection
+      await Future.delayed(const Duration(milliseconds: 1500));
+      
+      if (!socketService.isConnected) {
+        setState(() => _lastLocationStatus = 'Error de conexión al servidor');
+        return;
+      }
+
+      // Join child room
+      socketService.joinChildRoom(childId);
+      
+      // Emit online status
+      socketService.emitChildOnline();
+
+      if (mounted) {
+        setState(() {
+          _isTracking = true;
+          _lastLocationStatus = 'Conectado, iniciando stream GPS...';
+        });
+      }
+
+      // Cancelar cualquier subscription anterior antes de crear una nueva
+      await _positionSubscription?.cancel();
+      _positionSubscription = null;
+
+      // 3. Usar stream de ubicación en TIEMPO REAL
+      const locationSettings = LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5, // Solo emitir si se movió al menos 5 metros
+      );
+
+      // Capturar el childId en el closure para validación
+      final expectedChildId = childId;
+      
+      _positionSubscription = Geolocator.getPositionStream(
+        locationSettings: locationSettings,
+      ).listen(
+        (Position position) {
+          // CRÍTICO: Verificar que seguimos siendo el mismo hijo
+          if (_currentChildId != expectedChildId || !_isTracking) {
+            print('⚠️ Ignoring location update - child changed or tracking stopped');
+            return;
+          }
+          
+          print('📍 Real-time Location for child $expectedChildId: ${position.latitude}, ${position.longitude}');
+          
+          // El backend obtiene el childId del JWT, no necesitamos enviarlo
+          socketService.emitLocationUpdate(
+            position.latitude, 
+            position.longitude, 
+            85.0, // TODO: Get actual battery level
+            'Activo'
+          );
+
+          _lastLat = position.latitude;
+          _lastLng = position.longitude;
+          _safeSetState(() {
+            _lastLocationStatus = 'Compartiendo en tiempo real';
+          });
+        },
+        onError: (error) {
+          print('❌ Location stream error: $error');
+          if (_lastLat == null) {
+            _safeSetState(() => _lastLocationStatus = 'Error de GPS');
+          }
+        },
+      );
+
+    } catch (e, stack) {
+      print('❌ Error in _startLocationTracking: $e');
+      print(stack);
+      if (mounted) {
+        setState(() => _lastLocationStatus = 'Error: $e');
+      }
+    }
+  }
+
+  void _sendPanicAlert() {
+    final socketService = ref.read(socketServiceProvider);
+    
+    if (socketService.isConnected) {
+      // Emit panic alert via socket (el backend obtiene childId del JWT)
+      socketService.emitPanicAlert(_lastLat ?? 0, _lastLng ?? 0);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('¡Alerta de pánico enviada!'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error: No hay conexión con el servidor'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider);
-    final trackingState = ref.watch(locationTrackingProvider);
+    final socketService = ref.watch(socketServiceProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -39,10 +271,35 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
+          // Connection status indicator
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: socketService.isConnected ? Colors.green : Colors.red,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  socketService.isConnected ? Icons.wifi : Icons.wifi_off,
+                  color: Colors.white,
+                  size: 16,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  socketService.isConnected ? 'Online' : 'Offline',
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
-              ref.read(locationTrackingProvider.notifier).stopTracking();
+              print('🚪 Logging out child: $_currentChildId');
+              await _cleanup();
               await ref.read(authControllerProvider.notifier).logout();
             },
           ),
@@ -69,32 +326,45 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
             ),
             const SizedBox(height: 8),
             
-            // Tracking Status Indicator
+            // Tracking Status
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: trackingState.isLoading ? Colors.orange.shade100 : Colors.green.shade100,
+                color: _isTracking ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: _isTracking ? Colors.green : Colors.orange,
+                  width: 1,
+                ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    trackingState.isLoading ? Icons.sync : Icons.gps_fixed,
-                    size: 16,
-                    color: trackingState.isLoading ? Colors.orange.shade800 : Colors.green.shade800,
+                    _isTracking ? Icons.location_on : Icons.location_searching,
+                    color: _isTracking ? Colors.green : Colors.orange,
+                    size: 20,
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    trackingState.isLoading ? 'Iniciando GPS...' : 'Ubicación activa',
+                    _lastLocationStatus,
                     style: TextStyle(
-                      color: trackingState.isLoading ? Colors.orange.shade800 : Colors.green.shade800,
-                      fontWeight: FontWeight.bold,
+                      color: _isTracking ? Colors.green : Colors.orange,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
               ),
             ),
+            
+            // Show last coordinates if available
+            if (_lastLat != null && _lastLng != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Lat: ${_lastLat!.toStringAsFixed(6)}, Lng: ${_lastLng!.toStringAsFixed(6)}',
+                style: const TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+            ],
             
             const SizedBox(height: 48),
             
@@ -103,15 +373,7 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
               width: 200,
               height: 200,
               child: ElevatedButton(
-                onPressed: () {
-                  // TODO: Implement panic alert
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('¡Alerta de pánico enviada!'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                },
+                onPressed: _sendPanicAlert,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                   shape: const CircleBorder(),
@@ -136,12 +398,13 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
             // Status Button
             OutlinedButton.icon(
               onPressed: () {
-                // Force location update
-                ref.read(locationTrackingProvider.notifier).startTracking();
+                // El stream ya está emitiendo en tiempo real, solo mostrar confirmación
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Ubicación actualizada'),
-                    backgroundColor: Colors.green,
+                  SnackBar(
+                    content: Text(_isTracking 
+                      ? 'Ubicación compartida: $_lastLat, $_lastLng' 
+                      : 'Esperando conexión GPS...'),
+                    backgroundColor: _isTracking ? Colors.green : Colors.orange,
                   ),
                 );
               },
