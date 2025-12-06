@@ -5,13 +5,16 @@ abstract class ChildrenRepository {
   Future<Child?> getChildById(String id);
   Future<Child> createChild({
     required String name,
-    required String email,
-    required String password,
-    double? latitude,
-    double? longitude,
+    String? lastName,
+    String? phone,
   });
   Future<void> deleteChild(String id);
   Future<Child> updateChild(String id, Map<String, dynamic> data);
-  Future<Child> updateChildLocation(String id, double latitude, double longitude);
+  Future<Child> updateChildLocation(
+    String id,
+    double latitude,
+    double longitude,
+  );
   Future<void> removeChildFromTutor(String tutorId, String childId);
+  Future<String> regenerateCode(String childId);
 }

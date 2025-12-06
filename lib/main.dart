@@ -8,23 +8,125 @@ import 'src/features/notifications/data/services/fcm_service.dart';
 import 'src/features/notifications/presentation/providers/notifications_provider.dart';
 import 'src/features/notifications/domain/entities/app_notification.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
-  await Firebase.initializeApp();
-  
-  // Initialize FCM
-  final fcmService = FCMService();
-  await fcmService.initialize();
-  
-  runApp(ProviderScope(
-    child: MyApp(fcmService: fcmService),
-  ));
+  runApp(const AppBootstrapper());
+}
+
+class AppBootstrapper extends StatefulWidget {
+  const AppBootstrapper({super.key});
+
+  @override
+  State<AppBootstrapper> createState() => _AppBootstrapperState();
+}
+
+class _AppBootstrapperState extends State<AppBootstrapper> {
+  bool _isInitialized = false;
+  String _status = 'Iniciando...';
+  String? _error;
+  FCMService? _fcmService;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    try {
+      setState(() => _status = 'Cargando configuración...');
+      await dotenv.load(fileName: ".env");
+
+      setState(() => _status = 'Conectando servicios...');
+      await Firebase.initializeApp();
+
+      setState(() => _status = 'Iniciando notificaciones...');
+      _fcmService = FCMService();
+      // Add timeout to prevent infinite hang
+      await _fcmService!.initialize().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          print('FCM initialization timed out, continuing anyway...');
+        },
+      );
+
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+        });
+      }
+    } catch (e, stack) {
+      print('Initialization error: $e');
+      print(stack);
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _status = 'Error al iniciar';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error != null) {
+      return MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error de inicialización',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: _initializeApp,
+                    child: const Text('Reintentar'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (!_isInitialized) {
+      return MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                Text(_status),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return ProviderScope(child: MyApp(fcmService: _fcmService!));
+  }
 }
 
 class MyApp extends ConsumerStatefulWidget {
   final FCMService fcmService;
-  
+
   const MyApp({super.key, required this.fcmService});
 
   @override
@@ -35,7 +137,7 @@ class _MyAppState extends ConsumerState<MyApp> {
   @override
   void initState() {
     super.initState();
-    
+
     // Listen to FCM messages and add to notifications
     widget.fcmService.onMessage.listen((message) {
       final notification = AppNotification(
@@ -46,11 +148,11 @@ class _MyAppState extends ConsumerState<MyApp> {
         type: _getNotificationType(message.data),
         data: message.data,
       );
-      
+
       ref.read(notificationsProvider.notifier).addNotification(notification);
     });
   }
-  
+
   NotificationType _getNotificationType(Map<String, dynamic> data) {
     final type = data['type'] as String?;
     switch (type) {
@@ -70,7 +172,7 @@ class _MyAppState extends ConsumerState<MyApp> {
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
-    
+
     return MaterialApp.router(
       title: 'SafeSteps',
       theme: AppTheme.lightTheme,

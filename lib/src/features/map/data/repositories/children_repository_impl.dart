@@ -24,17 +24,13 @@ class ChildrenRepositoryImpl implements ChildrenRepository {
   @override
   Future<Child> createChild({
     required String name,
-    required String email,
-    required String password,
-    double? latitude,
-    double? longitude,
+    String? lastName,
+    String? phone,
   }) async {
     return await _dataSource.createChild(
       name: name,
-      email: email,
-      password: password,
-      latitude: latitude,
-      longitude: longitude,
+      lastName: lastName,
+      phone: phone,
     );
   }
 
@@ -49,12 +45,21 @@ class ChildrenRepositoryImpl implements ChildrenRepository {
   }
 
   @override
-  Future<Child> updateChildLocation(String id, double latitude, double longitude) async {
+  Future<Child> updateChildLocation(
+    String id,
+    double latitude,
+    double longitude,
+  ) async {
     return await _dataSource.updateChildLocation(id, latitude, longitude);
   }
 
   @override
   Future<void> removeChildFromTutor(String tutorId, String childId) async {
     await _dataSource.removeChildFromTutor(tutorId, childId);
+  }
+
+  @override
+  Future<String> regenerateCode(String childId) async {
+    return await _dataSource.regenerateCode(childId);
   }
 }

@@ -3,7 +3,7 @@ class AppUser {
   final String email;
   final String name;
   final String? photoUrl;
-  final String role; // 'tutor' or 'hijo'
+  final String? type; // 'tutor' or 'hijo'
   final List<String> childrenIds;
 
   const AppUser({
@@ -11,7 +11,7 @@ class AppUser {
     required this.email,
     required this.name,
     this.photoUrl,
-    this.role = 'tutor', // Default to tutor
+    this.type = 'tutor', // Default to tutor
     this.childrenIds = const [],
   });
 
@@ -21,7 +21,8 @@ class AppUser {
       email: firebaseUser.email ?? '',
       name: firebaseUser.displayName ?? 'Usuario',
       photoUrl: firebaseUser.photoURL,
-      role: 'tutor', // Firebase auth usually implies tutor/parent in this context initially
+      type:
+          'tutor', // Firebase auth usually implies tutor/parent in this context initially
     );
   }
 
@@ -30,8 +31,8 @@ class AppUser {
       id: json['id'].toString(),
       email: json['email'] as String,
       name: json['nombre'] as String,
-      photoUrl: null,
-      role: json['tipo'] as String? ?? 'tutor', // Map 'tipo' from backend to 'role'
+      photoUrl: null, // Backend doesn't send photoUrl yet
+      type: json['tipo'] as String?,
     );
   }
 }

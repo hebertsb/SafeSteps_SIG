@@ -31,6 +31,7 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+pubspec.lock
 
 # Symbolication related
 app.*.symbols
@@ -180,3 +181,7 @@ draft_docs/
 # Exceptions to above rules (files you DO want to track)
 !gradle-wrapper.jar
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
+
+# Documentation files
+*.md
+!README.md

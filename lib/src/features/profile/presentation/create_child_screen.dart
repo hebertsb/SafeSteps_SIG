@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../map/presentation/providers/children_provider.dart';
+import 'widgets/codigo_vinculacion_dialog.dart';
 
 class CreateChildScreen extends ConsumerStatefulWidget {
   const CreateChildScreen({super.key});
@@ -14,15 +16,15 @@ class CreateChildScreen extends ConsumerStatefulWidget {
 class _CreateChildScreenState extends ConsumerState<CreateChildScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _lastNameController = TextEditingController();
+  final _phoneController = TextEditingController();
   bool _isLoading = false;
 
   @override
   void dispose() {
     _nameController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
+    _lastNameController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -33,29 +35,34 @@ class _CreateChildScreenState extends ConsumerState<CreateChildScreen> {
 
     try {
       final repository = ref.read(childrenRepositoryProvider);
-      await repository.createChild(
+      final child = await repository.createChild(
         name: _nameController.text.trim(),
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
+        lastName: _lastNameController.text.trim().isEmpty
+            ? null
+            : _lastNameController.text.trim(),
+        phone: _phoneController.text.trim().isEmpty
+            ? null
+            : _phoneController.text.trim(),
       );
 
       if (mounted) {
         // Refresh the children list
         ref.invalidate(childrenProvider);
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Hijo creado exitosamente'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-        context.pop(); // Go back to profile
+
+        // Mostrar diálogo con código de vinculación
+        await _showCodigoDialog(child);
+
+        if (mounted) {
+          context.pop(); // Go back to profile
+        }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}'),
+            content: Text(
+              'Error: ${e.toString().replaceAll('Exception: ', '')}',
+            ),
             backgroundColor: AppColors.notification,
           ),
         );
@@ -65,6 +72,14 @@ class _CreateChildScreenState extends ConsumerState<CreateChildScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<void> _showCodigoDialog(child) async {
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => CodigoVinculacionDialog(child: child),
+    );
   }
 
   @override
@@ -98,15 +113,16 @@ class _CreateChildScreenState extends ConsumerState<CreateChildScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
-              
+
               // Nombre
               TextFormField(
                 controller: _nameController,
                 decoration: const InputDecoration(
-                  labelText: 'Nombre completo',
+                  labelText: 'Nombre *',
                   prefixIcon: Icon(Icons.person_outline),
                   border: OutlineInputBorder(),
                 ),
+                textCapitalization: TextCapitalization.words,
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Por favor ingresa el nombre';
@@ -118,50 +134,71 @@ class _CreateChildScreenState extends ConsumerState<CreateChildScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              
-              // Email
+
+              // Apellido (opcional)
               TextFormField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
+                controller: _lastNameController,
                 decoration: const InputDecoration(
-                  labelText: 'Correo electrónico',
-                  prefixIcon: Icon(Icons.email_outlined),
+                  labelText: 'Apellido (opcional)',
+                  prefixIcon: Icon(Icons.person_outline),
                   border: OutlineInputBorder(),
                 ),
+                textCapitalization: TextCapitalization.words,
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Por favor ingresa el correo';
-                  }
-                  if (!value.contains('@')) {
-                    return 'Ingresa un correo válido';
+                  if (value != null && value.isNotEmpty && value.length < 2) {
+                    return 'El apellido debe tener al menos 2 caracteres';
                   }
                   return null;
                 },
               ),
               const SizedBox(height: 16),
-              
-              // Password
+
+              // Teléfono (opcional)
               TextFormField(
-                controller: _passwordController,
-                obscureText: true,
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
                 decoration: const InputDecoration(
-                  labelText: 'Contraseña',
-                  prefixIcon: Icon(Icons.lock_outline),
+                  labelText: 'Teléfono (opcional)',
+                  prefixIcon: Icon(Icons.phone_outlined),
                   border: OutlineInputBorder(),
-                  helperText: 'Mínimo 6 caracteres',
                 ),
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Por favor ingresa la contraseña';
-                  }
-                  if (value.length < 6) {
-                    return 'La contraseña debe tener al menos 6 caracteres';
+                  if (value != null && value.isNotEmpty && value.length < 7) {
+                    return 'El teléfono debe tener al menos 7 caracteres';
                   }
                   return null;
                 },
               ),
-              const SizedBox(height: 32),
-              
+              const SizedBox(height: 24),
+
+              // Nota informativa
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Se generará automáticamente un código de 6 caracteres que tu hijo usará para iniciar sesión. El correo y contraseña se crean automáticamente.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
               // Submit Button
               FilledButton(
                 onPressed: _isLoading ? null : _submit,
@@ -183,7 +220,10 @@ class _CreateChildScreenState extends ConsumerState<CreateChildScreen> {
                       )
                     : const Text(
                         'Crear Cuenta',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
               ),
             ],

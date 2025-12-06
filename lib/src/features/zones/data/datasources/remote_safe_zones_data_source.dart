@@ -19,15 +19,18 @@ abstract class RemoteSafeZonesDataSource {
 
 class RemoteSafeZonesDataSourceImpl implements RemoteSafeZonesDataSource {
   // Use env var or fallback to localhost
-  static String get _baseUrl => dotenv.env['API_URL'] ?? 'http://127.0.0.1:3000'; 
-  
+  static String get _baseUrl =>
+      dotenv.env['API_URL'] ?? 'http://127.0.0.1:3000';
+
   final http.Client client;
 
   RemoteSafeZonesDataSourceImpl({http.Client? client})
-      : client = client ?? http.Client();
+    : client = client ?? http.Client();
 
   Future<String?> _getToken() async {
-    return await SecureStorageService.instance.read(key: SecureStorageService.tokenKey);
+    return await SecureStorageService.instance.read(
+      key: SecureStorageService.tokenKey,
+    );
   }
 
   @override
@@ -36,7 +39,7 @@ class RemoteSafeZonesDataSourceImpl implements RemoteSafeZonesDataSource {
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/zonas-seguras');
-    
+
     try {
       final response = await client.get(
         uri,
@@ -63,7 +66,7 @@ class RemoteSafeZonesDataSourceImpl implements RemoteSafeZonesDataSource {
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/zonas-seguras/$id');
-    
+
     try {
       final response = await client.get(
         uri,
@@ -140,13 +143,11 @@ class RemoteSafeZonesDataSourceImpl implements RemoteSafeZonesDataSource {
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/zonas-seguras/$id');
-    
+
     try {
       final response = await client.delete(
         uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
+        headers: {'Authorization': 'Bearer $token'},
       );
 
       if (response.statusCode != 200 && response.statusCode != 204) {
@@ -163,7 +164,7 @@ class RemoteSafeZonesDataSourceImpl implements RemoteSafeZonesDataSource {
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/zonas-seguras/$id');
-    
+
     try {
       final response = await client.patch(
         uri,
