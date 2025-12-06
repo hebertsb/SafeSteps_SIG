@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'shared/widgets/bottom_nav.dart';
+import 'features/map/domain/entities/child.dart';
 import 'features/map/presentation/map_screen.dart';
 import 'features/zones/presentation/zones_screen.dart';
 import 'features/profile/presentation/profile_screen.dart';
@@ -11,6 +12,7 @@ import 'features/auth/presentation/auth_screen.dart';
 import 'features/auth/presentation/child_login_screen.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/profile/presentation/create_child_screen.dart';
+import 'features/profile/presentation/child_detail_screen.dart';
 import 'features/child/presentation/child_home_screen.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -71,6 +73,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/create-child',
         builder: (context, state) => const CreateChildScreen(),
+      ),
+      GoRoute(
+        path: '/child-detail',
+        builder: (context, state) {
+          final child = state.extra as Child;
+          return ChildDetailScreen(child: child);
+        },
       ),
 
       // Main App Routes (Tutor)

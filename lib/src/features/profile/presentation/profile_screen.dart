@@ -18,7 +18,10 @@ class ProfileScreen extends ConsumerWidget {
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('SafeSteps', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Text(
+              'SafeSteps',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
             Text('Ubicación en tiempo real', style: TextStyle(fontSize: 12)),
           ],
         ),
@@ -42,7 +45,11 @@ class ProfileScreen extends ConsumerWidget {
                         color: Colors.white.withOpacity(0.2),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.person, color: Colors.white, size: 36),
+                      child: const Icon(
+                        Icons.person,
+                        color: Colors.white,
+                        size: 36,
+                      ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -60,22 +67,29 @@ class ProfileScreen extends ConsumerWidget {
                           const SizedBox(height: 4),
                           Text(
                             currentUser?.email ?? '',
-                            style: const TextStyle(color: Colors.white70, fontSize: 14),
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
                           ),
                         ],
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.settings, color: Colors.white70, size: 28),
+                      icon: const Icon(
+                        Icons.settings,
+                        color: Colors.white70,
+                        size: 28,
+                      ),
                       onPressed: () {},
                     ),
                   ],
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 24),
-            
+
             // Sección de Hijos
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -96,131 +110,168 @@ class ProfileScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 12),
-            
+
             childrenAsync.when(
               data: (children) => Column(
-                children: children.map((child) => Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.all(16),
-                    leading: Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          child.emoji,
-                          style: const TextStyle(fontSize: 28),
-                        ),
-                      ),
-                    ),
-                    title: Row(
-                      children: [
-                        Text(
-                          child.name,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: child.status == 'online' ? Colors.green.shade50 : Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.circle,
-                                size: 8,
-                                color: child.status == 'online' ? Colors.green.shade700 : Colors.grey,
+                children: children
+                    .map(
+                      (child) => Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.all(16),
+                          leading: Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Text(
+                                child.emoji,
+                                style: const TextStyle(fontSize: 28),
                               ),
-                              const SizedBox(width: 4),
+                            ),
+                          ),
+                          title: Row(
+                            children: [
                               Text(
-                                child.status == 'online' ? 'En línea' : 'Desconectado',
-                                style: TextStyle(
-                                  color: child.status == 'online' ? Colors.green.shade700 : Colors.grey,
-                                  fontSize: 11,
+                                child.name,
+                                style: const TextStyle(
                                   fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: child.status == 'online'
+                                      ? Colors.green.shade50
+                                      : Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.circle,
+                                      size: 8,
+                                      color: child.status == 'online'
+                                          ? Colors.green.shade700
+                                          : Colors.grey,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      child.status == 'online'
+                                          ? 'En línea'
+                                          : 'Desconectado',
+                                      style: TextStyle(
+                                        color: child.status == 'online'
+                                            ? Colors.green.shade700
+                                            : Colors.grey,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 6),
+                              Text(
+                                '${child.age} años • ${child.device}',
+                                style: const TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.phone_android,
+                                    size: 14,
+                                    color: Colors.grey,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '+34 612 345 678',
+                                    style: const TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          trailing: const Icon(
+                            Icons.chevron_right,
+                            color: Colors.grey,
+                          ),
+                          onTap: () {
+                            context.push('/child-detail', extra: child);
+                          },
                         ),
-                      ],
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 6),
-                        Text(
-                          '${child.age} años • ${child.device}',
-                          style: const TextStyle(color: Colors.grey, fontSize: 14),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Icon(Icons.phone_android, size: 14, color: Colors.grey),
-                            const SizedBox(width: 4),
-                            Text(
-                              '+34 612 345 678',
-                              style: const TextStyle(color: Colors.grey, fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-                  ),
-                )).toList(),
+                      ),
+                    )
+                    .toList(),
               ),
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (err, stack) => Text('Error: $err'),
             ),
 
             const SizedBox(height: 24),
-            
+
             // Sección de Configuración
             const Text(
               'Configuración',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
-            
+
             _buildConfigItem(
               icon: Icons.notifications,
               iconColor: Colors.orange,
               title: 'Notificaciones',
               subtitle: 'Configurar alertas',
             ),
-            
+
             _buildConfigItem(
               icon: Icons.shield,
               iconColor: Colors.orange.shade700,
               title: 'Privacidad',
               subtitle: 'Seguridad y permisos',
             ),
-            
+
             _buildConfigItem(
               icon: Icons.history,
               iconColor: Colors.orange.shade600,
               title: 'Historial',
               subtitle: 'Ver ubicaciones pasadas',
             ),
-            
+
             const SizedBox(height: 24),
-            
+
             OutlinedButton.icon(
               onPressed: () async {
                 await ref.read(authControllerProvider.notifier).logout();
               },
               icon: const Icon(Icons.logout, color: Colors.red),
-              label: const Text('Cerrar Sesión', style: TextStyle(color: Colors.red)),
+              label: const Text(
+                'Cerrar Sesión',
+                style: TextStyle(color: Colors.red),
+              ),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: Colors.red),
                 padding: const EdgeInsets.all(16),

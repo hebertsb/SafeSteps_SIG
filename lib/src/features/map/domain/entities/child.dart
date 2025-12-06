@@ -14,6 +14,7 @@ class Child {
   final double longitude;
   final DateTime lastUpdated;
   final List<Tutor> tutors;
+  final String? codigoVinculacion; // Código de 6 caracteres para login
 
   Child({
     required this.id,
@@ -29,6 +30,7 @@ class Child {
     required this.longitude,
     required this.lastUpdated,
     this.tutors = const [],
+    this.codigoVinculacion,
   });
 
   // Factory for creating from JSON (useful later for API)
@@ -39,18 +41,29 @@ class Child {
       email: json['email'] ?? '',
       age: json['age'] ?? 0,
       emoji: json['emoji'] ?? '👤',
-      phone: json['phone']?.toString() ?? '',
+      phone: json['telefono']?.toString() ?? json['phone']?.toString() ?? '',
       device: json['device'] ?? 'Unknown',
       status: json['status'] ?? 'offline',
       battery: (json['battery'] as num?)?.toDouble() ?? 0.0,
-      latitude: (json['latitud'] as num?)?.toDouble() ?? (json['latitude'] as num?)?.toDouble() ?? 0.0,
-      longitude: (json['longitud'] as num?)?.toDouble() ?? (json['longitude'] as num?)?.toDouble() ?? 0.0,
-      lastUpdated: json['ultimaconexion'] != null 
-          ? DateTime.parse(json['ultimaconexion']) 
-          : (json['lastUpdated'] != null ? DateTime.parse(json['lastUpdated']) : DateTime.now()),
-      tutors: (json['tutores'] as List<dynamic>?)
-          ?.map((t) => Tutor.fromJson(t))
-          .toList() ?? [],
+      latitude:
+          (json['latitud'] as num?)?.toDouble() ??
+          (json['latitude'] as num?)?.toDouble() ??
+          0.0,
+      longitude:
+          (json['longitud'] as num?)?.toDouble() ??
+          (json['longitude'] as num?)?.toDouble() ??
+          0.0,
+      lastUpdated: json['ultimaconexion'] != null
+          ? DateTime.parse(json['ultimaconexion'])
+          : (json['lastUpdated'] != null
+                ? DateTime.parse(json['lastUpdated'])
+                : DateTime.now()),
+      tutors:
+          (json['tutores'] as List<dynamic>?)
+              ?.map((t) => Tutor.fromJson(t))
+              .toList() ??
+          [],
+      codigoVinculacion: json['codigoVinculacion'] as String?,
     );
   }
 }

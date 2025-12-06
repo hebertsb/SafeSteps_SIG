@@ -8,10 +8,8 @@ abstract class RemoteChildrenDataSource {
   Future<List<Child>> getChildren();
   Future<Child> createChild({
     required String name,
-    required String email,
-    required String password,
-    double? latitude,
-    double? longitude,
+    String? lastName,
+    String? phone,
   });
   Future<Child> getChildById(String id);
   Future<void> deleteChild(String id);
@@ -22,6 +20,7 @@ abstract class RemoteChildrenDataSource {
     double longitude,
   );
   Future<void> removeChildFromTutor(String tutorId, String childId);
+  Future<String> regenerateCode(String childId);
 }
 
 class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
@@ -203,16 +202,15 @@ class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
   @override
   Future<Child> createChild({
     required String name,
-    required String email,
-    required String password,
-    double? latitude,
-    double? longitude,
+    String? lastName,
+    String? phone,
   }) async {
     final token = await _getToken();
     if (token == null) throw Exception('No authenticated user');
 
-    // Updated endpoint to associate child with logged-in tutor automatically
-    final uri = Uri.parse('$_baseUrl/tutores/me/hijos');
+    // Endpoint según documentación del backend v2.0
+    // Backend genera automáticamente email y password
+    final uri = Uri.parse('$_baseUrl/tutores/registrar-hijo');
 
     try {
       final response = await client.post(
@@ -223,23 +221,73 @@ class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
         },
         body: jsonEncode({
           'nombre': name,
-          'email': email,
-          'password': password,
-          // Latitude and longitude might not be supported by this specific endpoint based on docs,
-          // but sending them just in case or we can update location later.
-          // The docs say it receives nombre, email, password.
+          if (lastName != null && lastName.isNotEmpty) 'apellido': lastName,
+          if (phone != null && phone.isNotEmpty) 'telefono': phone,
         }),
       );
 
-      if (response.statusCode == 201) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
         final Map<String, dynamic> json = jsonDecode(response.body);
         return Child.fromJson(json);
+      } else if (response.statusCode == 409) {
+        throw Exception('El email ya está registrado');
+      } else if (response.statusCode == 401) {
+        throw Exception('Sesión expirada. Inicia sesión nuevamente.');
+      } else if (response.statusCode == 400) {
+        final Map<String, dynamic> error = jsonDecode(response.body);
+        final message = error['message'];
+        if (message is List) {
+          throw Exception(message.first);
+        }
+        throw Exception(message ?? 'Datos inválidos');
       } else {
         final Map<String, dynamic> error = jsonDecode(response.body);
-        throw Exception(error['message'] ?? 'Failed to create child');
+        throw Exception(error['message'] ?? 'Error al registrar hijo');
       }
     } catch (e) {
-      throw Exception('Error creating child: $e');
+      if (e.toString().contains('Exception:')) {
+        rethrow;
+      }
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  @override
+  Future<String> regenerateCode(String childId) async {
+    final token = await _getToken();
+    if (token == null) throw Exception('No authenticated user');
+
+    // Endpoint según API-REGENERAR-CODIGO-HIJO.md
+    final uri = Uri.parse('$_baseUrl/hijos/$childId/regenerar-codigo');
+
+    try {
+      final response = await client.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({}), // Body vacío según la guía
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> json = jsonDecode(response.body);
+        return json['codigoVinculacion'] as String;
+      } else if (response.statusCode == 401) {
+        throw Exception(
+          'No tienes permisos para regenerar el código de este hijo',
+        );
+      } else if (response.statusCode == 404) {
+        throw Exception('Hijo no encontrado');
+      } else {
+        final Map<String, dynamic> error = jsonDecode(response.body);
+        throw Exception(error['message'] ?? 'Error al regenerar código');
+      }
+    } catch (e) {
+      if (e.toString().contains('Exception:')) {
+        rethrow;
+      }
+      throw Exception('Error de conexión: $e');
     }
   }
 }
