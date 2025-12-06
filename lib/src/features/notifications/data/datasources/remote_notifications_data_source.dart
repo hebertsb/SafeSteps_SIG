@@ -19,23 +19,21 @@ abstract class RemoteNotificationsDataSource {
   Future<AppNotification> sendNotification(String message, String type);
 }
 
-class RemoteNotificationsDataSourceImpl implements RemoteNotificationsDataSource {
-<<<<<<< HEAD
-  // Backend URL - Tu PC WiFi IP
-  // Para dispositivo físico o iOS simulator: usa 192.168.0.8:3000
-  static const _baseUrl = 'http://192.168.0.8:3000';
-=======
+class RemoteNotificationsDataSourceImpl
+    implements RemoteNotificationsDataSource {
   // Use env var or fallback to localhost
-  static String get _baseUrl => dotenv.env['API_URL'] ?? 'http://127.0.0.1:3000';
->>>>>>> 39a4014fdb5c1b44b0732d23ca75cbc1b91bb01e
-  
+  static String get _baseUrl =>
+      dotenv.env['API_URL'] ?? 'http://127.0.0.1:3000';
+
   final http.Client client;
 
   RemoteNotificationsDataSourceImpl({http.Client? client})
-      : client = client ?? http.Client();
+    : client = client ?? http.Client();
 
   Future<String?> _getToken() async {
-    return await SecureStorageService.instance.read(key: SecureStorageService.tokenKey);
+    return await SecureStorageService.instance.read(
+      key: SecureStorageService.tokenKey,
+    );
   }
 
   @override
@@ -55,8 +53,10 @@ class RemoteNotificationsDataSourceImpl implements RemoteNotificationsDataSource
       if (isRead != null) 'leida': isRead.toString(),
     };
 
-    final uri = Uri.parse('$_baseUrl/notifications').replace(queryParameters: queryParams);
-    
+    final uri = Uri.parse(
+      '$_baseUrl/notifications',
+    ).replace(queryParameters: queryParams);
+
     try {
       final response = await client.get(
         uri,
@@ -83,7 +83,7 @@ class RemoteNotificationsDataSourceImpl implements RemoteNotificationsDataSource
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/notifications/unread/count');
-    
+
     try {
       final response = await client.get(
         uri,
@@ -110,13 +110,11 @@ class RemoteNotificationsDataSourceImpl implements RemoteNotificationsDataSource
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/notifications/mark-all-read');
-    
+
     try {
       final response = await client.post(
         uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
+        headers: {'Authorization': 'Bearer $token'},
       );
 
       if (response.statusCode != 200) {
@@ -133,7 +131,7 @@ class RemoteNotificationsDataSourceImpl implements RemoteNotificationsDataSource
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/notifications/mark-read');
-    
+
     try {
       final response = await client.post(
         uri,
@@ -160,17 +158,17 @@ class RemoteNotificationsDataSourceImpl implements RemoteNotificationsDataSource
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/notifications/$id');
-    
+
     try {
       final response = await client.delete(
         uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
+        headers: {'Authorization': 'Bearer $token'},
       );
 
       if (response.statusCode != 204) {
-        throw Exception('Failed to delete notification: ${response.statusCode}');
+        throw Exception(
+          'Failed to delete notification: ${response.statusCode}',
+        );
       }
     } catch (e) {
       throw Exception('Error deleting notification: $e');
@@ -183,7 +181,7 @@ class RemoteNotificationsDataSourceImpl implements RemoteNotificationsDataSource
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/notifications');
-    
+
     try {
       final response = await client.delete(
         uri,
@@ -197,7 +195,9 @@ class RemoteNotificationsDataSourceImpl implements RemoteNotificationsDataSource
       );
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to delete notifications: ${response.statusCode}');
+        throw Exception(
+          'Failed to delete notifications: ${response.statusCode}',
+        );
       }
     } catch (e) {
       throw Exception('Error deleting notifications: $e');
@@ -210,7 +210,7 @@ class RemoteNotificationsDataSourceImpl implements RemoteNotificationsDataSource
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/notifications');
-    
+
     try {
       final response = await client.post(
         uri,
@@ -218,10 +218,7 @@ class RemoteNotificationsDataSourceImpl implements RemoteNotificationsDataSource
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({
-          'mensaje': message,
-          'tipo': type,
-        }),
+        body: jsonEncode({'mensaje': message, 'tipo': type}),
       );
 
       if (response.statusCode == 201) {

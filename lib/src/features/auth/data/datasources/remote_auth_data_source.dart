@@ -19,15 +19,8 @@ abstract class RemoteAuthDataSource {
 }
 
 class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
-<<<<<<< HEAD
-  // Backend URL - Tu PC WiFi IP
-  // Para emulador Android: usa 10.0.2.2:3000
-  // Para dispositivo físico o iOS simulator: usa 192.168.0.8:3000
-  static const _baseUrl = 'http://192.168.0.8:3000';
-=======
   // Use env var or fallback to localhost
   static String get _baseUrl => dotenv.env['API_URL'] ?? 'http://127.0.0.1:3000';
->>>>>>> 39a4014fdb5c1b44b0732d23ca75cbc1b91bb01e
 
   final http.Client client;
 

@@ -16,27 +16,28 @@ abstract class RemoteChildrenDataSource {
   Future<Child> getChildById(String id);
   Future<void> deleteChild(String id);
   Future<Child> updateChild(String id, Map<String, dynamic> data);
-  Future<Child> updateChildLocation(String id, double latitude, double longitude);
+  Future<Child> updateChildLocation(
+    String id,
+    double latitude,
+    double longitude,
+  );
   Future<void> removeChildFromTutor(String tutorId, String childId);
 }
 
 class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
-<<<<<<< HEAD
-  // Backend URL - Tu PC WiFi IP
-  // Para dispositivo físico o iOS simulator: usa 192.168.0.8:3000
-  static const _baseUrl = 'http://192.168.0.8:3000';
-=======
   // Use env var or fallback to localhost
-  static String get _baseUrl => dotenv.env['API_URL'] ?? 'http://127.0.0.1:3000'; 
->>>>>>> 39a4014fdb5c1b44b0732d23ca75cbc1b91bb01e
-  
+  static String get _baseUrl =>
+      dotenv.env['API_URL'] ?? 'http://127.0.0.1:3000';
+
   final http.Client client;
 
   RemoteChildrenDataSourceImpl({http.Client? client})
-      : client = client ?? http.Client();
+    : client = client ?? http.Client();
 
   Future<String?> _getToken() async {
-    return await SecureStorageService.instance.read(key: SecureStorageService.tokenKey);
+    return await SecureStorageService.instance.read(
+      key: SecureStorageService.tokenKey,
+    );
   }
 
   @override
@@ -45,7 +46,7 @@ class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/hijos');
-    
+
     try {
       final response = await client.get(
         uri,
@@ -72,7 +73,7 @@ class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/hijos/$id');
-    
+
     try {
       final response = await client.get(
         uri,
@@ -99,13 +100,11 @@ class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/hijos/$id');
-    
+
     try {
       final response = await client.delete(
         uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
+        headers: {'Authorization': 'Bearer $token'},
       );
 
       if (response.statusCode != 200 && response.statusCode != 204) {
@@ -122,7 +121,7 @@ class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/hijos/$id');
-    
+
     try {
       final response = await client.patch(
         uri,
@@ -145,12 +144,16 @@ class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
   }
 
   @override
-  Future<Child> updateChildLocation(String id, double latitude, double longitude) async {
+  Future<Child> updateChildLocation(
+    String id,
+    double latitude,
+    double longitude,
+  ) async {
     final token = await _getToken();
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/hijos/$id/location');
-    
+
     try {
       final response = await client.patch(
         uri,
@@ -158,17 +161,16 @@ class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({
-          'latitud': latitude,
-          'longitud': longitude,
-        }),
+        body: jsonEncode({'latitud': latitude, 'longitud': longitude}),
       );
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
         return Child.fromJson(json);
       } else {
-        throw Exception('Failed to update child location: ${response.statusCode}');
+        throw Exception(
+          'Failed to update child location: ${response.statusCode}',
+        );
       }
     } catch (e) {
       throw Exception('Error updating child location: $e');
@@ -181,17 +183,17 @@ class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/tutores/$tutorId/hijos/$childId');
-    
+
     try {
       final response = await client.delete(
         uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
+        headers: {'Authorization': 'Bearer $token'},
       );
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to remove child from tutor: ${response.statusCode}');
+        throw Exception(
+          'Failed to remove child from tutor: ${response.statusCode}',
+        );
       }
     } catch (e) {
       throw Exception('Error removing child from tutor: $e');
@@ -211,7 +213,7 @@ class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
 
     // Updated endpoint to associate child with logged-in tutor automatically
     final uri = Uri.parse('$_baseUrl/tutores/me/hijos');
-    
+
     try {
       final response = await client.post(
         uri,

@@ -19,22 +19,19 @@ abstract class RemoteSafeZonesDataSource {
 }
 
 class RemoteSafeZonesDataSourceImpl implements RemoteSafeZonesDataSource {
-<<<<<<< HEAD
-  // Backend URL - Tu PC WiFi IP
-  // Para dispositivo físico o iOS simulator: usa 192.168.0.8:3000
-  static const _baseUrl = 'http://192.168.0.8:3000';
-=======
   // Use env var or fallback to localhost
-  static String get _baseUrl => dotenv.env['API_URL'] ?? 'http://127.0.0.1:3000'; 
->>>>>>> 39a4014fdb5c1b44b0732d23ca75cbc1b91bb01e
-  
+  static String get _baseUrl =>
+      dotenv.env['API_URL'] ?? 'http://127.0.0.1:3000';
+
   final http.Client client;
 
   RemoteSafeZonesDataSourceImpl({http.Client? client})
-      : client = client ?? http.Client();
+    : client = client ?? http.Client();
 
   Future<String?> _getToken() async {
-    return await SecureStorageService.instance.read(key: SecureStorageService.tokenKey);
+    return await SecureStorageService.instance.read(
+      key: SecureStorageService.tokenKey,
+    );
   }
 
   @override
@@ -43,7 +40,7 @@ class RemoteSafeZonesDataSourceImpl implements RemoteSafeZonesDataSource {
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/zonas-seguras');
-    
+
     try {
       final response = await client.get(
         uri,
@@ -70,7 +67,7 @@ class RemoteSafeZonesDataSourceImpl implements RemoteSafeZonesDataSource {
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/zonas-seguras/$id');
-    
+
     try {
       final response = await client.get(
         uri,
@@ -103,7 +100,7 @@ class RemoteSafeZonesDataSourceImpl implements RemoteSafeZonesDataSource {
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/zonas-seguras');
-    
+
     try {
       final response = await client.post(
         uri,
@@ -137,13 +134,11 @@ class RemoteSafeZonesDataSourceImpl implements RemoteSafeZonesDataSource {
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/zonas-seguras/$id');
-    
+
     try {
       final response = await client.delete(
         uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
+        headers: {'Authorization': 'Bearer $token'},
       );
 
       if (response.statusCode != 200 && response.statusCode != 204) {
@@ -160,7 +155,7 @@ class RemoteSafeZonesDataSourceImpl implements RemoteSafeZonesDataSource {
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/zonas-seguras/$id');
-    
+
     try {
       final response = await client.patch(
         uri,
