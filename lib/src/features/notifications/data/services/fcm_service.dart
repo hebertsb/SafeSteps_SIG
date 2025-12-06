@@ -24,6 +24,8 @@ class FCMService {
   String? get fcmToken => _fcmToken;
 
   Future<void> initialize() async {
+    print('🔥 Initializing FCM Service...');
+    
     // Request permission
     NotificationSettings settings = await _firebaseMessaging.requestPermission(
       alert: true,
@@ -32,16 +34,24 @@ class FCMService {
       provisional: false,
     );
 
+    print('🔥 FCM Authorization Status: ${settings.authorizationStatus}');
+
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      log('User granted permission');
+      print('✅ User granted permission');
+    } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
+      print('⚠️ User granted provisional permission');
     } else {
-      log('User declined or has not accepted permission');
+      print('❌ User declined or has not accepted permission');
       return;
     }
 
     // Get FCM token
-    _fcmToken = await _firebaseMessaging.getToken();
-    log('FCM Token: $_fcmToken');
+    try {
+      _fcmToken = await _firebaseMessaging.getToken();
+      print('🔥 FCM Token: $_fcmToken');
+    } catch (e) {
+      print('❌ Error getting FCM token: $e');
+    }
 
     // Configure foreground notification presentation
     await _firebaseMessaging.setForegroundNotificationPresentationOptions(
@@ -55,27 +65,28 @@ class FCMService {
 
     // Handle foreground messages
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      log('Foreground message received: ${message.notification?.title}');
+      print('🔥 Foreground message received: ${message.notification?.title}');
+      print('🔥 Message data: ${message.data}');
       _messageStreamController.add(message);
     });
 
     // Handle notification tap when app is in background
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      log('Notification tapped: ${message.data}');
+      print('🔥 Notification tapped: ${message.data}');
       _messageStreamController.add(message);
     });
 
     // Handle notification tap when app was terminated
     RemoteMessage? initialMessage = await _firebaseMessaging.getInitialMessage();
     if (initialMessage != null) {
-      log('App opened from terminated state: ${initialMessage.data}');
+      print('🔥 App opened from terminated state: ${initialMessage.data}');
       _messageStreamController.add(initialMessage);
     }
 
     // Listen for token refresh
     _firebaseMessaging.onTokenRefresh.listen((newToken) {
       _fcmToken = newToken;
-      log('FCM Token refreshed: $newToken');
+      print('🔥 FCM Token refreshed: $newToken');
     });
   }
 

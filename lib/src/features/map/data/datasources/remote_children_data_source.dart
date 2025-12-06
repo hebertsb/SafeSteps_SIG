@@ -165,6 +165,7 @@ class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
+        print('✅ Backend Response: $json'); // Debug info for user
         return Child.fromJson(json);
       } else {
         throw Exception(

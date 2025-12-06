@@ -43,6 +43,9 @@ class AuthController extends AsyncNotifier<AppUser?> {
         );
 
         if (userId != null && userName != null && userEmail != null) {
+          // Sync FCM Token on startup
+          await _syncFcmToken(token);
+
           return AppUser(
             id: userId,
             email: userEmail,

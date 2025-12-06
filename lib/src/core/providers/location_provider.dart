@@ -13,6 +13,17 @@ final locationTrackingProvider = AsyncNotifierProvider<LocationTrackingNotifier,
   return LocationTrackingNotifier();
 });
 
+final lastLocationProvider = NotifierProvider<LastLocationNotifier, DateTime?>(LastLocationNotifier.new);
+
+class LastLocationNotifier extends Notifier<DateTime?> {
+  @override
+  DateTime? build() => null;
+
+  void update(DateTime time) {
+    state = time;
+  }
+}
+
 class LocationTrackingNotifier extends AsyncNotifier<void> {
   StreamSubscription<Position>? _subscription;
 
@@ -46,6 +57,7 @@ class LocationTrackingNotifier extends AsyncNotifier<void> {
             position.latitude,
             position.longitude,
           );
+          ref.read(lastLocationProvider.notifier).update(DateTime.now());
           print('Location sent to backend: ${position.latitude}, ${position.longitude}');
         } catch (e) {
           print('Error sending location to backend: $e');
