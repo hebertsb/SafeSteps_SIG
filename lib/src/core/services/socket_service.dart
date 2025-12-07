@@ -6,8 +6,14 @@ class SocketService {
   io.Socket? _socket;
   final _locationController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final _panicController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _statusController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get locationStream => _locationController.stream;
+  Stream<Map<String, dynamic>> get panicStream => _panicController.stream;
+  Stream<Map<String, dynamic>> get statusStream => _statusController.stream;
 
   bool get isConnected => _socket?.connected ?? false;
 
@@ -15,16 +21,25 @@ class SocketService {
     final baseUrl = dotenv.env['API_URL'] ?? 'http://10.0.2.2:3000';
     print('🔌 Connecting to Socket.IO at $baseUrl');
 
-    if (_socket != null && _socket!.connected) {
-      print('⚠️ Socket already connected');
-      return;
+    // Siempre desconectar el socket anterior antes de crear uno nuevo
+    // Esto asegura que usemos el token correcto del usuario actual
+    if (_socket != null) {
+      print('🔄 Disconnecting previous socket to reconnect with new token');
+      _socket!.disconnect();
+      _socket!.dispose();
+      _socket!.destroy();
+      _socket = null;
     }
 
+    // Usar forceNew para forzar una nueva conexión completamente
+    // y enviar el token tanto en headers como en auth
     _socket = io.io(
       baseUrl,
       io.OptionBuilder()
           .setTransports(['websocket'])
           .setExtraHeaders({'Authorization': 'Bearer $token'})
+          .setAuth({'token': token}) // También enviar en auth
+          .enableForceNew() // Forzar nueva conexión
           .enableAutoConnect()
           .build(),
     );
@@ -53,6 +68,28 @@ class SocketService {
     _socket!.on('joined', (data) {
       print('🚪 Joined room: $data');
     });
+
+    _socket!.on('left', (data) {
+      print('🚪 Left room: $data');
+    });
+
+    _socket!.on('childStatusChanged', (data) {
+      print('👶 Child status changed: $data');
+      _statusController.add(Map<String, dynamic>.from(data));
+    });
+
+    _socket!.on('locationRequested', (data) {
+      print('📍 Location requested by parent: $data');
+    });
+
+    _socket!.on('panicAlert', (data) {
+      print('🚨 Panic alert received: $data');
+      _panicController.add(Map<String, dynamic>.from(data));
+    });
+
+    _socket!.on('error', (data) {
+      print('❌ Server error: $data');
+    });
   }
 
   void joinChildRoom(String childId) {
@@ -70,18 +107,16 @@ class SocketService {
     }
   }
 
-  // Method to simulate child sending location (for testing)
+  // Method for child to emit location (childId se obtiene del JWT en el backend)
   void emitLocationUpdate(
-    String childId,
     double lat,
     double lng,
     double battery,
     String status,
   ) {
     if (_socket != null && _socket!.connected) {
-      print('📤 Emitting updateLocation for $childId: $lat, $lng');
+      print('📤 Emitting updateLocation: $lat, $lng');
       _socket!.emit('updateLocation', {
-        'childId': childId,
         'lat': lat,
         'lng': lng,
         'battery': battery,
@@ -92,8 +127,57 @@ class SocketService {
     }
   }
 
+  // Method for child to notify they are online
+  void emitChildOnline() {
+    if (_socket != null && _socket!.connected) {
+      print('📤 Emitting childOnline');
+      _socket!.emit('childOnline', {});
+    }
+  }
+
+  // Method for child to notify they are going offline
+  void emitChildOffline() {
+    if (_socket != null && _socket!.connected) {
+      print('📤 Emitting childOffline');
+      _socket!.emit('childOffline', {});
+    }
+  }
+
+  // Method for child to send panic alert (childId se obtiene del JWT en el backend)
+  void emitPanicAlert(double lat, double lng) {
+    if (_socket != null && _socket!.connected) {
+      print('🚨 Emitting panicAlert');
+      _socket!.emit('panicAlert', {
+        'lat': lat,
+        'lng': lng,
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+    } else {
+      print('❌ Cannot emit panic alert: Socket not connected');
+    }
+  }
+
+  // Method for parent to request child location
+  void requestChildLocation(String childId) {
+    if (_socket != null && _socket!.connected) {
+      print('📤 Requesting location for child $childId');
+      _socket!.emit('requestLocation', {'childId': childId});
+    }
+  }
+
   void disconnect() {
-    _socket?.disconnect();
-    _socket = null;
+    print('🔌 Disconnecting socket...');
+    if (_socket != null) {
+      _socket!.disconnect();
+      _socket!.dispose();
+      _socket = null;
+    }
+  }
+
+  void dispose() {
+    _locationController.close();
+    _panicController.close();
+    _statusController.close();
+    disconnect();
   }
 }

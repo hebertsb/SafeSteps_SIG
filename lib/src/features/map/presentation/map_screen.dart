@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:geolocator/geolocator.dart';
 import '../../../core/theme/app_colors.dart';
 import 'providers/children_provider.dart';
 import '../../../core/services/socket_provider.dart';
 import '../../../core/services/secure_storage_service.dart';
 import '../domain/entities/child.dart';
-import '../../auth/presentation/providers/auth_provider.dart';
+import '../../zones/presentation/providers/safe_zones_provider.dart';
+import '../../zones/domain/entities/safe_zone.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -20,115 +20,13 @@ class MapScreen extends ConsumerStatefulWidget {
 
 class _MapScreenState extends ConsumerState<MapScreen> {
   final Map<String, Child> _liveChildren = {};
-  bool _joinedRooms = false;
-  bool _isChild = false;
-  bool _isTracking = false;
-  bool _isFetchingLocation = false;
+  final Set<String> _joinedChildRooms = {}; // Track which rooms we've joined
+  bool _socketConnected = false;
 
   @override
   void initState() {
     super.initState();
-    _checkUserTypeAndConnect();
-  }
-
-  Future<void> _checkUserTypeAndConnect() async {
-    final user = ref.read(currentUserProvider);
-    print('DEBUG: Current User: ${user?.name}, Type: ${user?.type}, ID: ${user?.id}');
-    
-    // Normalize type check (handle null, lowercase, uppercase)
-    final userType = user?.type?.toLowerCase() ?? '';
-    
-    if (userType == 'hijo') {
-      print('DEBUG: User identified as CHILD. Starting location tracking...');
-      setState(() {
-        _isChild = true;
-      });
-      _startLocationTracking(user!.id);
-    } else {
-      print('DEBUG: User identified as PARENT (or unknown). Connecting as parent...');
-      _connectSocketForParent();
-    }
-  }
-
-  Future<void> _startLocationTracking(String childId) async {
-    print('DEBUG: Starting _startLocationTracking for $childId');
-    
-    // 1. Check permissions
-    LocationPermission permission = await Geolocator.checkPermission();
-    
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        print('DEBUG: Permission denied');
-        return;
-      }
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      print('DEBUG: Permission denied forever');
-      return;
-    }
-
-    try {
-      // 2. Connect socket
-      final socketService = ref.read(socketServiceProvider);
-      final token = await SecureStorageService.instance.read(key: SecureStorageService.tokenKey);
-      
-      if (token != null) {
-        socketService.connect(token);
-        
-        // Wait for connection before joining
-        await Future.delayed(const Duration(milliseconds: 1000));
-        
-        socketService.joinChildRoom(childId);
-        
-        if (mounted) {
-          setState(() => _isTracking = true);
-        }
-
-        // 3. Listen to location changes
-        // Use Timer.periodic instead of Stream for emulator reliability
-        // Increased to 5s to prevent timeouts on emulator
-        Timer.periodic(const Duration(seconds: 5), (timer) async {
-          if (!mounted) {
-            timer.cancel();
-            return;
-          }
-          
-          // Prevent overlapping fetches
-          if (_isFetchingLocation) return;
-          _isFetchingLocation = true;
-          
-          try {
-            // Force Android Location Manager which is often more reliable on emulators
-            Position position = await Geolocator.getCurrentPosition(
-              desiredAccuracy: LocationAccuracy.high,
-              forceAndroidLocationManager: true,
-              timeLimit: const Duration(seconds: 4)
-            );
-            
-            print('📍 New Location: ${position.latitude}, ${position.longitude}');
-            
-            socketService.emitLocationUpdate(
-              childId, 
-              position.latitude, 
-              position.longitude, 
-              85.0, 
-              'En movimiento'
-            );
-          } catch (e) {
-            print('❌ Error fetching location: $e');
-          } finally {
-            _isFetchingLocation = false;
-          }
-        });
-      } else {
-        print('❌ No token found, cannot connect socket');
-      }
-    } catch (e, stack) {
-      print('❌ Error in _startLocationTracking: $e');
-      print(stack);
-    }
+    _connectSocketForParent();
   }
 
   Future<void> _connectSocketForParent() async {
@@ -149,23 +47,31 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final childrenAsync = ref.read(childrenProvider);
       childrenAsync.whenData((children) {
         if (socketService.isConnected) {
+          print('🔗 Joining rooms for ${children.length} children:');
           for (var child in children) {
-            print('DEBUG: Joining room for child ${child.id}');
-            socketService.joinChildRoom(child.id);
+            if (!_joinedChildRooms.contains(child.id)) {
+              print('🔗   - Child "${child.name}" with ID: "${child.id}"');
+              socketService.joinChildRoom(child.id);
+              _joinedChildRooms.add(child.id);
+            }
           }
-          _joinedRooms = true;
+          _socketConnected = true;
         }
       });
       
+      // Listen for location updates from children
       socketService.locationStream.listen((data) {
         print('📍 Location update received in MapScreen: $data');
         if (mounted) {
           setState(() {
             final childId = data['childId'].toString();
+            print('📍 Looking for childId: "$childId"');
             
             final childrenAsync = ref.read(childrenProvider);
             childrenAsync.whenData((children) {
+              print('📍 Available children IDs: ${children.map((c) => '"${c.id}"').toList()}');
               final childIndex = children.indexWhere((c) => c.id == childId);
+              print('📍 Found at index: $childIndex');
               if (childIndex != -1) {
                 final originalChild = children[childIndex];
                 _liveChildren[childId] = originalChild.copyWith(
@@ -174,12 +80,107 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   battery: (data['battery'] as num).toDouble(),
                   status: data['status'] as String,
                 );
+                print('📍 Updated _liveChildren[$childId] with new location');
+              } else {
+                print('⚠️ Child with ID "$childId" NOT FOUND in children list!');
               }
             });
           });
         }
       });
+
+      // Listen for child status changes (online/offline)
+      socketService.statusStream.listen((data) {
+        print('👶 Status change received in MapScreen: $data');
+        if (mounted) {
+          setState(() {
+            final childId = data['childId'].toString();
+            final isOnline = data['online'] as bool;
+            
+            // Actualizar el estado del hijo en _liveChildren
+            if (_liveChildren.containsKey(childId)) {
+              _liveChildren[childId] = _liveChildren[childId]!.copyWith(
+                status: isOnline ? 'online' : 'offline',
+              );
+              print('👶 Updated status for child $childId: ${isOnline ? "online" : "offline"}');
+            } else {
+              // Si no está en _liveChildren, buscarlo en children y agregarlo
+              final childrenAsync = ref.read(childrenProvider);
+              childrenAsync.whenData((children) {
+                final childIndex = children.indexWhere((c) => c.id == childId);
+                if (childIndex != -1) {
+                  _liveChildren[childId] = children[childIndex].copyWith(
+                    status: isOnline ? 'online' : 'offline',
+                  );
+                  print('👶 Added child $childId to _liveChildren with status: ${isOnline ? "online" : "offline"}');
+                }
+              });
+            }
+          });
+        }
+      });
+
+      // Listen for panic alerts
+      socketService.panicStream.listen((data) {
+        print('🚨 Panic alert received in MapScreen: $data');
+        if (mounted) {
+          _showPanicAlert(data);
+        }
+      });
     }
+  }
+
+  void _showPanicAlert(Map<String, dynamic> data) {
+    final childId = data['childId'].toString();
+    final childrenAsync = ref.read(childrenProvider);
+    
+    childrenAsync.whenData((children) {
+      final child = children.firstWhere(
+        (c) => c.id == childId,
+        orElse: () => Child(
+          id: childId, 
+          name: 'Hijo', 
+          email: '',
+          latitude: 0, 
+          longitude: 0, 
+          lastUpdated: DateTime.now(),
+        ),
+      );
+      
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.red.shade50,
+          title: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 32),
+              const SizedBox(width: 8),
+              const Text('¡ALERTA DE PÁNICO!', style: TextStyle(color: Colors.red)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${child.name} ha enviado una alerta de emergencia.'),
+              const SizedBox(height: 8),
+              if (data['lat'] != null && data['lng'] != null)
+                Text(
+                  'Ubicación: ${data['lat']}, ${data['lng']}',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('ENTENDIDO'),
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   @override
@@ -187,49 +188,49 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     super.dispose();
   }
 
+  /// Construye la capa de polígonos para las zonas seguras
+  Widget _buildSafeZonesLayer(AsyncValue<List<SafeZone>> safeZonesAsync) {
+    return safeZonesAsync.when(
+      data: (zones) => PolygonLayer(
+        polygons: zones
+            .where((zone) => zone.points.isNotEmpty)
+            .map((zone) => Polygon(
+                  points: zone.points,
+                  color: zone.displayColor.withOpacity(0.3),
+                  borderColor: zone.displayColor,
+                  borderStrokeWidth: 2,
+                  isFilled: true,
+                  label: zone.name,
+                  labelStyle: TextStyle(
+                    color: zone.displayColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ))
+            .toList(),
+      ),
+      loading: () => PolygonLayer(polygons: <Polygon<Object>>[]),
+      error: (_, __) => PolygonLayer(polygons: <Polygon<Object>>[]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // If user is a Child, show a different screen
-    if (_isChild) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Modo Hijo')),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.location_on, 
-                size: 64, 
-                color: _isTracking ? Colors.green : Colors.grey
-              ),
-              const SizedBox(height: 16),
-              Text(
-                _isTracking ? 'Compartiendo ubicación...' : 'Iniciando rastreo...',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Tu ubicación se está enviando a tus padres en tiempo real.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Parent View (Existing Map Logic)
+    // Parent View - Map with children locations
     final childrenAsync = ref.watch(childrenProvider);
     final socketService = ref.watch(socketServiceProvider);
+    final safeZonesAsync = ref.watch(safeZonesProvider);
 
-    // Join rooms when children are loaded (Backup trigger)
+    // Verificar si hay nuevos hijos para unirse a sus salas
     childrenAsync.whenData((children) {
-      if (!_joinedRooms && socketService.isConnected) {
+      if (socketService.isConnected) {
         for (var child in children) {
-          socketService.joinChildRoom(child.id);
+          if (!_joinedChildRooms.contains(child.id)) {
+            print('🔗 Joining room for child: "${child.name}" ID: "${child.id}"');
+            socketService.joinChildRoom(child.id);
+            _joinedChildRooms.add(child.id);
+          }
         }
-        _joinedRooms = true;
       }
     });
 
@@ -243,6 +244,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           ],
         ),
         actions: [
+          // Botón de refresh para actualizar lista de hijos
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Actualizar hijos',
+            onPressed: () {
+              ref.invalidate(childrenProvider);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Actualizando lista de hijos...'),
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            },
+          ),
           Container(
             margin: const EdgeInsets.only(right: 16),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -263,14 +278,27 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       ),
       body: childrenAsync.when(
         data: (children) {
-          // Show ALL children. If we have live data, use it. Otherwise, show as offline.
-          final List<Child> displayChildren = children.map((child) {
-            if (_liveChildren.containsKey(child.id)) {
-              return _liveChildren[child.id]!;
-            }
-            // Mark as offline if no live data received yet
-            return child.copyWith(status: 'offline');
-          }).toList();
+          // DEBUG: Log de hijos cargados
+          print('🗺️ Children loaded from API: ${children.length}');
+          for (var c in children) {
+            print('   - "${c.name}" ID: "${c.id}" lat: ${c.latitude}, lng: ${c.longitude}');
+          }
+          print('🗺️ Live children updates: ${_liveChildren.keys.toList()}');
+          
+          // Filtrar hijos con ubicación válida y aplicar datos en tiempo real
+          final List<Child> displayChildren = children
+              .map((child) {
+                if (_liveChildren.containsKey(child.id)) {
+                  final liveChild = _liveChildren[child.id]!;
+                  print('🗺️ Using LIVE data for "${child.name}" (ID: ${child.id}): ${liveChild.latitude}, ${liveChild.longitude}');
+                  return liveChild;
+                }
+                // Mark as offline if no live data received yet
+                return child.copyWith(status: 'offline');
+              })
+              // Solo mostrar hijos con ubicación válida (lat y lng diferentes de 0)
+              .where((child) => child.latitude != 0 || child.longitude != 0)
+              .toList();
 
           return Column(
             children: [
@@ -287,6 +315,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.safesteps.safe_steps_mobile',
                     ),
+                    // Capa de zonas seguras (polígonos)
+                    _buildSafeZonesLayer(safeZonesAsync),
                     MarkerLayer(
                       markers: displayChildren.map((child) {
                         final isOffline = child.status == 'offline';

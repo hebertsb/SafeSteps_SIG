@@ -44,7 +44,8 @@ class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
     final token = await _getToken();
     if (token == null) throw Exception('No authenticated user');
 
-    final uri = Uri.parse('$_baseUrl/hijos');
+    // Usar el endpoint que devuelve SOLO los hijos del tutor autenticado
+    final uri = Uri.parse('$_baseUrl/tutores/me/hijos');
 
     try {
       final response = await client.get(
@@ -57,7 +58,11 @@ class RemoteChildrenDataSourceImpl implements RemoteChildrenDataSource {
 
       if (response.statusCode == 200) {
         final List<dynamic> jsonList = jsonDecode(response.body);
-        return jsonList.map((json) => Child.fromJson(json)).toList();
+        // Filtrar solo hijos con ubicación válida (lat y lng != 0)
+        return jsonList
+            .map((json) => Child.fromJson(json))
+            .where((child) => child.latitude != 0 || child.longitude != 0)
+            .toList();
       } else {
         throw Exception('Failed to load children: ${response.statusCode}');
       }
