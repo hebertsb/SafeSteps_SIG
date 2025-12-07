@@ -71,14 +71,26 @@ class FCMService {
       print('🔥 Message data: ${message.data}');
       
       final type = message.data['type'];
+      print('🔔 Notification type: $type');
+      
       if (type == 'sos_panico') {
         print('🚨 SOS Alert received! Triggering alarm...');
         await SOSService.vibrarPatronSOS();
         await SOSService.reproducirSonidoSOS();
       } else {
-        // Standard vibration for other notifications
-        if (await Vibration.hasVibrator() ?? false) {
-           await Vibration.vibrate(duration: 500);
+        // Standard vibration for other notifications (zone alerts, etc)
+        print('📳 Attempting vibration for notification...');
+        try {
+          final hasVibrator = await Vibration.hasVibrator();
+          print('📳 Has vibrator: $hasVibrator');
+          if (hasVibrator == true) {
+            await Vibration.vibrate(duration: 500, amplitude: 255);
+            print('✅ Vibration triggered successfully');
+          } else {
+            print('⚠️ Device does not have vibrator');
+          }
+        } catch (e) {
+          print('❌ Vibration error: $e');
         }
       }
       
