@@ -2,6 +2,8 @@ import 'dart:developer';
 import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:vibration/vibration.dart';
+import '../../../sos/data/sos_service.dart';
 
 // Background message handler (must be top-level function)
 @pragma('vm:entry-point')
@@ -64,9 +66,22 @@ class FCMService {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
     // Handle foreground messages
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       print('🔥 Foreground message received: ${message.notification?.title}');
       print('🔥 Message data: ${message.data}');
+      
+      final type = message.data['type'];
+      if (type == 'sos_panico') {
+        print('🚨 SOS Alert received! Triggering alarm...');
+        await SOSService.vibrarPatronSOS();
+        await SOSService.reproducirSonidoSOS();
+      } else {
+        // Standard vibration for other notifications
+        if (await Vibration.hasVibrator() ?? false) {
+           await Vibration.vibrate(duration: 500);
+        }
+      }
+      
       _messageStreamController.add(message);
     });
 

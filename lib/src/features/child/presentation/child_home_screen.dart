@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/presentation/providers/auth_provider.dart';
 import '../../../core/providers/location_provider.dart';
+import '../../sos/presentation/widgets/sos_button.dart';
 
 class ChildHomeScreen extends ConsumerStatefulWidget {
   const ChildHomeScreen({super.key});
@@ -58,7 +59,10 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
             const SizedBox(height: 30),
 
             // SOS Button
-            _buildSOSButton(),
+            _buildSOSButton(
+              currentUser != null ? int.tryParse(currentUser.id) : null,
+              currentUser?.name,
+            ),
             const SizedBox(height: 30),
 
             // Action Buttons
@@ -228,52 +232,12 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
     );
   }
 
-  Widget _buildSOSButton() {
-    return GestureDetector(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('¡Alerta de pánico enviada!'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      },
-      child: Container(
-        width: 180,
-        height: 180,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFFF5252), Color(0xFFD32F2F)],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFFF5252).withOpacity(0.4),
-              blurRadius: 20,
-              spreadRadius: 5,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: const Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.notifications_active, size: 60, color: Colors.white),
-            SizedBox(height: 8),
-            Text(
-              'SOS',
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                letterSpacing: 2,
-              ),
-            ),
-          ],
-        ),
-      ),
+  Widget _buildSOSButton(int? id, String? name) {
+    if (id == null) return const SizedBox.shrink();
+    
+    return SOSButton(
+      hijoId: id,
+      nombreHijo: name ?? 'Hijo',
     );
   }
 
