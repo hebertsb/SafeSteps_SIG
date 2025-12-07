@@ -14,6 +14,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/services/socket_provider.dart';
 import '../../../core/services/secure_storage_service.dart';
 import '../../../core/services/background_location_service.dart';
+import '../../../core/services/sync_service.dart';
+import '../../../core/services/network_service.dart';
+import '../../../core/models/registro.dart';
 import '../../../core/providers/location_provider.dart';
 import '../../auth/presentation/providers/auth_provider.dart';
 import '../../sos/presentation/widgets/sos_button.dart';
@@ -45,10 +48,17 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
   // Device info
   String _deviceName = 'Unknown';
 
+  // Sync & Offline Support
+  late SyncService _syncService;
+  late NetworkService _networkService;
+  int _pendingRecords = 0;
+  bool _isOnline = true;
+
   @override
   void initState() {
     super.initState();
     _initBattery();
+    _initSyncServices(); // Inicializar servicios de sync
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!_isInitialized) {
         _isInitialized = true;
@@ -74,6 +84,61 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
     }
     if (mounted) setState(() {});
   }
+
+  /// Inicializa los servicios de sincronización offline/online
+  void _initSyncServices() {
+    try {
+      _syncService = SyncService();
+      _networkService = NetworkService();
+
+      // Inicializar servicios de forma async sin bloquear UI
+      Future.delayed(const Duration(milliseconds: 500), () async {
+        try {
+          await _syncService.initialize();
+          
+          // Agregar listener para cambios de sincronización
+          _syncService.addSyncListener(_onSyncStatusChange);
+          
+          // Actualizar estado inicial
+          final stats = await _syncService.obtenerEstadisticas();
+          final pending = stats['pending'] ?? 0;
+          final online = await _syncService.isOnline();
+          
+          if (mounted) {
+            setState(() {
+              _pendingRecords = pending;
+              _isOnline = online;
+            });
+          }
+          
+          print('✅ Servicios de sync inicializados');
+        } catch (e) {
+          print('⚠️ Error inicializando sync services: $e');
+        }
+      });
+    } catch (e) {
+      print('❌ Error en _initSyncServices: $e');
+    }
+  }
+
+  /// Callback cuando cambia el estado de sincronización
+  void _onSyncStatusChange(bool success, int synced) {
+    if (mounted) {
+      setState(() {
+        _pendingRecords = _pendingRecords > synced ? _pendingRecords - synced : 0;
+      });
+      
+      if (success && synced > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ $synced ubicaciones sincronizadas'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
   
   Future<void> _initDeviceInfo() async {
     try {
@@ -98,6 +163,12 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
     _positionSubscription?.cancel();
     _positionSubscription = null;
     _batterySubscription?.cancel();
+    
+    // Limpiar servicios de sync
+    _syncService.removeSyncListener(_onSyncStatusChange);
+    _syncService.dispose();
+    _networkService.dispose();
+    
     super.dispose();
   }
   
@@ -284,7 +355,7 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
             return;
           }
           
-          // Send location with real battery level via WebSocket (for real-time map)
+          // 1. Send location with real battery level via WebSocket (for real-time map)
           socketService.emitLocationUpdate(
             position.latitude, 
             position.longitude, 
@@ -293,8 +364,17 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
             device: _deviceName,
           );
           
-          // Also send via HTTP to trigger backend zone detection with PostGIS
+          // 2. Also send via HTTP to trigger backend zone detection with PostGIS
           _updateLocationOnBackend(position.latitude, position.longitude);
+
+          // 3. NUEVO: Registrar ubicación en el sistema de sync (online/offline)
+          // Si hay internet: envía directamente
+          // Si no hay internet: guarda localmente para sincronizar después
+          _registrarUbicacionConSync(
+            position.latitude,
+            position.longitude,
+            childId,
+          );
 
           _lastLat = position.latitude;
           _lastLng = position.longitude;
@@ -317,6 +397,37 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
       if (mounted) {
         setState(() => _lastLocationStatus = 'Error: $e');
       }
+    }
+  }
+
+  /// Registra una ubicación en el sistema de sincronización offline/online
+  /// - Si hay internet: envía directamente al servidor
+  /// - Si no hay internet: guarda localmente para sincronizar después
+  Future<void> _registrarUbicacionConSync(
+    double latitud,
+    double longitud,
+    String hijoId,
+  ) async {
+    try {
+      await _syncService.registrarUbicacion(
+        latitud: latitud,
+        longitud: longitud,
+        hijoId: hijoId,
+      );
+
+      // Si hay internet y hay registros pendientes, intenta sincronizar
+      if (_syncService.isOnlineSync) {
+        // Se ejecuta cada 30 segundos automáticamente por el timer interno
+        // pero también lo hacemos explícito aquí si hay cambios de conectividad
+        final stats = await _syncService.obtenerEstadisticas();
+        final pending = stats['pending'] ?? 0;
+        
+        if (mounted && pending != _pendingRecords) {
+          setState(() => _pendingRecords = pending);
+        }
+      }
+    } catch (e) {
+      print('⚠️ Error registrando ubicación: $e');
     }
   }
 
@@ -569,6 +680,54 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
                         color: Colors.grey.shade700,
                         fontFamily: 'monospace',
                       ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          
+          // NUEVA SECCIÓN: Estado de sincronización
+          if (_pendingRecords > 0 || !_isOnline) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _isOnline ? Colors.amber.shade50 : Colors.red.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _isOnline ? Colors.amber.shade200 : Colors.red.shade200,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _isOnline ? Icons.cloud_queue : Icons.cloud_off,
+                    color: _isOnline ? Colors.amber.shade700 : Colors.red.shade700,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _isOnline ? 'Sincronizando' : 'Modo Sin Conexión',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: _isOnline ? Colors.amber.shade700 : Colors.red.shade700,
+                          ),
+                        ),
+                        if (_pendingRecords > 0)
+                          Text(
+                            '$_pendingRecords ubicaciones pendientes',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ],
