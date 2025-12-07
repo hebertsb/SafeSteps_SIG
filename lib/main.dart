@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'src/app_router.dart';
 import 'src/core/theme/app_theme.dart';
+import 'src/core/services/background_location_service.dart';
 import 'src/features/notifications/data/services/fcm_service.dart';
 import 'src/features/notifications/presentation/providers/notifications_provider.dart';
 import 'src/features/notifications/domain/entities/app_notification.dart';
@@ -39,6 +40,9 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
 
       setState(() => _status = 'Conectando servicios...');
       await Firebase.initializeApp();
+
+      // NOTE: BackgroundLocationService is now initialized lazily when child logs in
+      // to avoid notification channel issues on Android 13+
 
       setState(() => _status = 'Iniciando notificaciones...');
       _fcmService = FCMService();

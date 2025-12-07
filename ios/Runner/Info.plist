@@ -49,5 +49,13 @@
 	<string>SafeSteps necesita tu ubicación para que tus padres sepan que estás seguro.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>SafeSteps necesita tu ubicación para que tus padres sepan que estás seguro.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>SafeSteps necesita acceder a tu ubicación en segundo plano para que tus padres siempre sepan que estás seguro, incluso cuando la app esté cerrada.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
 </dict>
 </plist>
