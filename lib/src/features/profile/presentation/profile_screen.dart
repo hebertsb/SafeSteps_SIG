@@ -1,18 +1,109 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/services/socket_provider.dart';
+import '../../map/domain/entities/child.dart';
 import '../../map/presentation/providers/children_provider.dart';
 import '../../auth/presentation/providers/auth_provider.dart';
 
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  Map<String, Child> _liveChildren = {};
+  StreamSubscription? _locationSub;
+  StreamSubscription? _statusSub;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setupSocketListeners();
+    });
+  }
+
+  @override
+  void dispose() {
+    _locationSub?.cancel();
+    _statusSub?.cancel();
+    super.dispose();
+  }
+
+  void _setupSocketListeners() {
+    final socketService = ref.read(socketServiceProvider);
+    
+    // Listen for location updates
+    _locationSub = socketService.locationStream.listen((data) {
+      if (mounted) {
+        final childId = data['childId'].toString();
+        final newDevice = data['device'] as String? ?? 'Unknown';
+        setState(() {
+          if (_liveChildren.containsKey(childId)) {
+            final currentDevice = _liveChildren[childId]!.device;
+            _liveChildren[childId] = _liveChildren[childId]!.copyWith(
+              battery: (data['battery'] as num).toDouble(),
+              status: 'online',
+              device: newDevice != 'Unknown' ? newDevice : currentDevice,
+              lastUpdated: DateTime.now(),
+            );
+          }
+        });
+      }
+    });
+
+    // Listen for status changes
+    _statusSub = socketService.statusStream.listen((data) {
+      if (mounted) {
+        final childId = data['childId'].toString();
+        final isOnline = data['online'] as bool;
+        final newDevice = data['device'] as String? ?? 'Unknown';
+        setState(() {
+          if (_liveChildren.containsKey(childId)) {
+            final currentDevice = _liveChildren[childId]!.device;
+            _liveChildren[childId] = _liveChildren[childId]!.copyWith(
+              status: isOnline ? 'online' : 'offline',
+              device: newDevice != 'Unknown' ? newDevice : currentDevice,
+              lastUpdated: DateTime.now(),
+            );
+          }
+        });
+      }
+    });
+  }
+
+  Child _getLiveChild(Child child) {
+    return _liveChildren[child.id] ?? child;
+  }
+
+  void _initializeLiveChildren(List<Child> children) {
+    for (final child in children) {
+      if (!_liveChildren.containsKey(child.id)) {
+        _liveChildren[child.id] = child;
+        // Join socket room for this child
+        final socketService = ref.read(socketServiceProvider);
+        if (socketService.isConnected) {
+          socketService.joinChildRoom(child.id);
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final childrenAsync = ref.watch(childrenProvider);
     final currentUser = ref.watch(currentUserProvider);
+
+    // Initialize live children when data is available
+    childrenAsync.whenData((children) {
+      _initializeLiveChildren(children);
+    });
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -69,7 +160,7 @@ class ProfileScreen extends ConsumerWidget {
                   childrenAsync.when(
                     data: (children) => children.isEmpty
                         ? _buildEmptyChildrenState()
-                        : _buildChildrenList(context, children),
+                        : _buildChildrenList(context, children.map((c) => _getLiveChild(c)).toList()),
                     loading: () => const Center(
                       child: Padding(
                         padding: EdgeInsets.all(32),
@@ -389,7 +480,7 @@ class _ChildCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '${child.age} años • ${child.device}',
+                        child.device,
                         style: TextStyle(
                           color: Colors.grey.shade600,
                           fontSize: 13,
@@ -497,51 +588,57 @@ class _AnimatedLogoutButtonState extends State<_AnimatedLogoutButton>
                 ),
               ],
             ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                // Door frame
-                Positioned(
-                  right: 90,
-                  child: Transform.rotate(
-                    angle: _doorAnimation.value * -0.8,
-                    alignment: Alignment.centerRight,
-                    child: Icon(
-                      Icons.door_back_door_outlined,
-                      color: Colors.white.withOpacity(0.9),
-                      size: 28,
-                    ),
-                  ),
-                ),
-                // Person walking out
-                Transform.translate(
-                  offset: Offset(_personAnimation.value * 60, 0),
-                  child: Opacity(
-                    opacity: 1 - (_personAnimation.value * 0.3),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _isAnimating
-                              ? Icons.directions_walk_rounded
-                              : Icons.logout_rounded,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          _isAnimating ? 'Saliendo...' : 'Cerrar Sesión',
-                          style: const TextStyle(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Person walking out with text (centered)
+                  Transform.translate(
+                    offset: Offset(_personAnimation.value * 50, 0),
+                    child: Opacity(
+                      opacity: 1 - (_personAnimation.value * 0.3),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            _isAnimating
+                                ? Icons.directions_walk_rounded
+                                : Icons.logout_rounded,
                             color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                            size: 22,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          Text(
+                            _isAnimating ? 'Saliendo...' : 'Cerrar Sesión',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  // Door frame - positioned to the right, opens when person exits
+                  Positioned(
+                    right: 24,
+                    child: Transform(
+                      transform: Matrix4.identity()
+                        ..setEntry(3, 2, 0.001) // perspective
+                        ..rotateY(_doorAnimation.value * -1.2), // rotate on Y axis (open door effect)
+                      alignment: Alignment.centerLeft, // hinge on left side
+                      child: Icon(
+                        Icons.door_back_door_outlined,
+                        color: Colors.white.withOpacity(0.9 - _doorAnimation.value * 0.3),
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         },

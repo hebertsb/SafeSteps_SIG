@@ -26,7 +26,10 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
   void initState() {
     super.initState();
     _liveChild = widget.child;
-    _setupSocketListeners();
+    // Use addPostFrameCallback to ensure ref is available
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setupSocketListeners();
+    });
   }
 
   @override
@@ -39,10 +42,14 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
   void _setupSocketListeners() {
     final socketService = ref.read(socketServiceProvider);
     
+    print('🔌 ChildDetailScreen: Setting up socket listeners for child ${widget.child.id}');
+    print('🔌 Socket connected: ${socketService.isConnected}');
+    
     // Listen for location updates
     _locationSub = socketService.locationStream.listen((data) {
       if (mounted && data['childId'].toString() == widget.child.id) {
         final newDevice = data['device'] as String? ?? 'Unknown';
+        print('📍 ChildDetailScreen: Location update received - device: $newDevice, battery: ${data['battery']}');
         setState(() {
           _liveChild = _liveChild.copyWith(
             latitude: (data['lat'] as num).toDouble(),
@@ -61,6 +68,7 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
       if (mounted && data['childId'].toString() == widget.child.id) {
         final isOnline = data['online'] as bool;
         final newDevice = data['device'] as String? ?? 'Unknown';
+        print('🔄 ChildDetailScreen: Status update - online: $isOnline, device: $newDevice');
         setState(() {
           _liveChild = _liveChild.copyWith(
             status: isOnline ? 'online' : 'offline',
@@ -74,6 +82,7 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
     // Join the child's room if not already
     if (socketService.isConnected) {
       socketService.joinChildRoom(widget.child.id);
+      print('🚪 ChildDetailScreen: Joined room for child ${widget.child.id}');
     }
   }
 
