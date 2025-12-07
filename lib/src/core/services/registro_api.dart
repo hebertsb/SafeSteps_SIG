@@ -86,8 +86,15 @@ class RegistroApi {
 
       // Preparar payload con array de registros
       final payload = {
-        'registros': registros.map((r) => r.toJson()).toList(),
+        'registros': registros.map((r) => r.toJsonForSync()).toList(),
       };
+
+      // DEBUG: Mostrar el payload exacto que se envía
+      print('📦 Payload a enviar:');
+      for (var r in registros) {
+        print('  - hora: ${r.hora}, fueOffline: ${r.fueOffline}');
+      }
+      print('📦 JSON final: ${jsonEncode(payload)}');
 
       final response = await http.post(
         url,

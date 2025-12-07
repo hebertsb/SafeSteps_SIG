@@ -13,6 +13,7 @@ import '../../zones/presentation/providers/safe_zones_provider.dart';
 import '../../zones/domain/entities/safe_zone.dart';
 import '../../../core/models/registro.dart';
 import '../../../core/services/sync_service.dart';
+import '../../../core/services/registro_api.dart';
 import '../providers/location_history_provider.dart';
 import '../widgets/location_history_panel.dart';
 import '../widgets/route_layer.dart';
@@ -33,6 +34,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _showOnlineRoute = true;
   Map<String, List<Registro>> _locationHistory = {};
   bool _isLoadingHistory = false;
+  String? _showRouteChildId; // ID del niño cuyas rutas se muestran (persiste después de cerrar panel)
 
   @override
   void initState() {
@@ -216,6 +218,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     HapticFeedback.lightImpact();
     setState(() {
       _selectedChild = child;
+      _showRouteChildId = child.id; // Mantener rutas visibles
       _isLoadingHistory = true;
     });
     
@@ -235,6 +238,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         onClose: () {
           Navigator.pop(context);
           setState(() => _selectedChild = null);
+          // Las rutas permanecen visibles (_showRouteChildId no se borra)
         },
         onCenterMap: () {
           Navigator.pop(context);
@@ -253,18 +257,60 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       ),
     ).whenComplete(() {
       setState(() => _selectedChild = null);
+      // Las rutas permanecen visibles
     });
   }
 
   Future<void> _loadLocationHistory(String hijoId) async {
     try {
       final syncService = SyncService();
-      final registros = await syncService.obtenerPendientesByHijo(hijoId);
+      final api = RegistroApi();
+      
+      // 1. Obtener registros pendientes locales (offline)
+      final localRegistros = await syncService.obtenerPendientesByHijo(hijoId);
+      
+      // 2. Obtener registros del backend (sincronizados)
+      List<Registro> remoteRegistros = [];
+      try {
+        final result = await api.obtenerRegistros(hijoId);
+        if (result != null) {
+          // Marcar como sincronizados
+          remoteRegistros = result.map((r) => r.copyWith(isSynced: true)).toList();
+        }
+      } catch (e) {
+        print('⚠️ No se pudo obtener historial del backend: $e');
+        // Continuar solo con locales si falla el backend
+      }
+      
+      // 3. Combinar ambos sin duplicados (por latitud/longitud/hora)
+      final allRegistros = <Registro>[];
+      final seen = <String>{};
+      
+      for (final r in [...remoteRegistros, ...localRegistros]) {
+        final key = '${r.latitud.toStringAsFixed(5)}_${r.longitud.toStringAsFixed(5)}_${r.hora}';
+        if (!seen.contains(key)) {
+          seen.add(key);
+          allRegistros.add(r);
+        }
+      }
+      
+      // 4. Ordenar por hora (más antiguos primero para dibujar la ruta correctamente)
+      allRegistros.sort((a, b) {
+        try {
+          final dateA = DateTime.parse(a.hora);
+          final dateB = DateTime.parse(b.hora);
+          return dateA.compareTo(dateB);
+        } catch (_) {
+          return 0;
+        }
+      });
       
       setState(() {
-        _locationHistory[hijoId] = registros;
+        _locationHistory[hijoId] = allRegistros;
         _isLoadingHistory = false;
       });
+      
+      print('📍 Historial cargado: ${remoteRegistros.length} del backend + ${localRegistros.length} locales = ${allRegistros.length} total');
     } catch (e) {
       print('Error loading location history: $e');
       setState(() => _isLoadingHistory = false);
@@ -393,20 +439,26 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   ),
                   _buildSafeZonesLayer(safeZonesAsync),
                   
-                  // Mostrar rutas del niño seleccionado
-                  if (_selectedChild != null && _locationHistory.containsKey(_selectedChild!.id))
+                  // Mostrar rutas del niño (persisten después de cerrar panel)
+                  if (_showRouteChildId != null && _locationHistory.containsKey(_showRouteChildId!))
                     RouteLayer(
-                      registros: _locationHistory[_selectedChild!.id] ?? [],
+                      registros: _locationHistory[_showRouteChildId!] ?? [],
                       showOfflineRoute: _showOfflineRoute,
                       showOnlineRoute: _showOnlineRoute,
                     ),
                   
-                  // Mostrar puntos de ruta del niño seleccionado
-                  if (_selectedChild != null && _locationHistory.containsKey(_selectedChild!.id))
+                  // Mostrar puntos de ruta (persisten después de cerrar panel)
+                  if (_showRouteChildId != null && _locationHistory.containsKey(_showRouteChildId!))
                     RoutePointsMarker(
-                      registros: _locationHistory[_selectedChild!.id] ?? [],
+                      registros: _locationHistory[_showRouteChildId!] ?? [],
                       showOfflinePoints: _showOfflineRoute,
                       showOnlinePoints: _showOnlineRoute,
+                    ),
+                  
+                  // Mostrar flechas de dirección (persisten después de cerrar panel)
+                  if (_showRouteChildId != null && _locationHistory.containsKey(_showRouteChildId!))
+                    RouteArrowsLayer(
+                      registros: _locationHistory[_showRouteChildId!] ?? [],
                     ),
                   
                   MarkerLayer(
@@ -583,6 +635,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       }
                     },
                     child: Icon(Icons.my_location_rounded, color: AppColors.primary),
+                  ),
+                ),
+              
+              // Botón para ocultar rutas (aparece cuando hay rutas visibles)
+              if (_showRouteChildId != null)
+                Positioned(
+                  right: 16,
+                  bottom: 260,
+                  child: FloatingActionButton.small(
+                    heroTag: 'hide_route',
+                    backgroundColor: Colors.orange.shade100,
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      setState(() {
+                        _showRouteChildId = null;
+                        _locationHistory.clear();
+                      });
+                    },
+                    child: Icon(Icons.route, color: Colors.orange.shade700),
                   ),
                 ),
             ],

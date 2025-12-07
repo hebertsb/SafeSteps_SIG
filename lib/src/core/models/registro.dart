@@ -7,6 +7,7 @@ class Registro {
   final double longitud;
   final String hijoId;
   final bool isSynced;
+  final bool fueOffline; // Indica si fue capturado sin conexión
 
   Registro({
     this.id,
@@ -15,27 +16,48 @@ class Registro {
     required this.longitud,
     required this.hijoId,
     this.isSynced = false,
+    this.fueOffline = false,
   });
 
   /// Convierte de JSON (desde API) a Registro
   factory Registro.fromJson(Map<String, dynamic> json) {
+    // Manejar hora como String o DateTime
+    String horaStr;
+    if (json['hora'] is String) {
+      horaStr = json['hora'] as String;
+    } else if (json['hora'] is DateTime) {
+      horaStr = (json['hora'] as DateTime).toIso8601String();
+    } else {
+      horaStr = DateTime.now().toIso8601String();
+    }
+    
     return Registro(
       id: json['id']?.toString(),
-      hora: json['hora'] as String,
+      hora: horaStr,
       latitud: (json['latitud'] as num).toDouble(),
       longitud: (json['longitud'] as num).toDouble(),
-      hijoId: json['hijoId'] as String,
-      isSynced: json['isSynced'] as bool? ?? false,
+      hijoId: json['hijoId'].toString(),
+      isSynced: json['isSynced'] as bool? ?? true,
+      fueOffline: json['fueOffline'] as bool? ?? false, // Lee del backend si existe
     );
   }
 
-  /// Convierte Registro a JSON (para enviar a API)
+  /// Convierte Registro a JSON (para enviar a API - registro individual)
   Map<String, dynamic> toJson() => {
     'hora': hora,
     'latitud': latitud,
     'longitud': longitud,
-    'hijoId': hijoId,
-    'isSynced': isSynced,
+    // NO incluir hijoId ni fueOffline - el backend los rechaza
+  };
+
+  /// Convierte para envío en batch sync (sin hijoId)
+  /// El hijoId viene de la URL, no del body
+  /// fueOffline se envía si el backend lo acepta como opcional
+  Map<String, dynamic> toJsonForSync() => {
+    'hora': hora,
+    'latitud': latitud,
+    'longitud': longitud,
+    'fueOffline': fueOffline, // Ahora se envía al backend
   };
 
   /// Convierte a Map para SQLite
@@ -45,6 +67,7 @@ class Registro {
     'longitud': longitud,
     'hijoId': hijoId,
     'isSynced': isSynced ? 1 : 0,
+    'fueOffline': fueOffline ? 1 : 0,
   };
 
   /// Convierte de Map de SQLite a Registro
@@ -56,6 +79,7 @@ class Registro {
       longitud: (map['longitud'] as num).toDouble(),
       hijoId: map['hijoId'] as String,
       isSynced: (map['isSynced'] as int) == 1,
+      fueOffline: (map['fueOffline'] as int?) == 1,
     );
   }
 
@@ -67,6 +91,7 @@ class Registro {
     double? longitud,
     String? hijoId,
     bool? isSynced,
+    bool? fueOffline,
   }) {
     return Registro(
       id: id ?? this.id,
@@ -75,12 +100,13 @@ class Registro {
       longitud: longitud ?? this.longitud,
       hijoId: hijoId ?? this.hijoId,
       isSynced: isSynced ?? this.isSynced,
+      fueOffline: fueOffline ?? this.fueOffline,
     );
   }
 
   @override
   String toString() =>
-      'Registro(id: $id, hora: $hora, lat: $latitud, lng: $longitud, hijoId: $hijoId, synced: $isSynced)';
+      'Registro(id: $id, hora: $hora, lat: $latitud, lng: $longitud, hijoId: $hijoId, synced: $isSynced, offline: $fueOffline)';
 
   @override
   bool operator ==(Object other) =>

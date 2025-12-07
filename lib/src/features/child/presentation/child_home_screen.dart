@@ -415,15 +415,25 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
         hijoId: hijoId,
       );
 
-      // Si hay internet y hay registros pendientes, intenta sincronizar
-      if (_syncService.isOnlineSync) {
-        // Se ejecuta cada 30 segundos automáticamente por el timer interno
-        // pero también lo hacemos explícito aquí si hay cambios de conectividad
-        final stats = await _syncService.obtenerEstadisticas();
-        final pending = stats['pending'] ?? 0;
+      // Actualizar estadísticas
+      final stats = await _syncService.obtenerEstadisticas();
+      final pending = stats['pending'] ?? 0;
+      final isOnline = await _syncService.isOnline();
+      
+      if (mounted && pending != _pendingRecords) {
+        setState(() => _pendingRecords = pending);
+      }
+      
+      // Si hay internet Y hay registros pendientes, forzar sincronización
+      if (isOnline && pending > 0) {
+        print('🔄 Forzando sincronización: $pending registros pendientes');
+        await _syncService.syncPendingRecords();
         
-        if (mounted && pending != _pendingRecords) {
-          setState(() => _pendingRecords = pending);
+        // Actualizar conteo después de sincronizar
+        final newStats = await _syncService.obtenerEstadisticas();
+        final newPending = newStats['pending'] ?? 0;
+        if (mounted) {
+          setState(() => _pendingRecords = newPending);
         }
       }
     } catch (e) {

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -26,41 +27,37 @@ class RouteLayer extends StatelessWidget {
   List<Polyline> _buildPolylines() {
     if (registros.isEmpty) return [];
 
-    // Separa registros sinchronizados y pendientes
-    final syncedRegistros = registros.where((r) => r.isSynced).toList();
-    final pendingRegistros = registros.where((r) => !r.isSynced).toList();
-
-    // Ordena por hora para dibujar la ruta correctamente
-    syncedRegistros.sort((a, b) => a.hora.compareTo(b.hora));
-    pendingRegistros.sort((a, b) => a.hora.compareTo(b.hora));
+    // Ordena todos los registros primero para conectar correctamente
+    final sortedRegistros = List<Registro>.from(registros)
+      ..sort((a, b) => a.hora.compareTo(b.hora));
 
     final polylines = <Polyline>[];
 
-    // Polyline para registros sincronizados (ruta en línea)
-    if (showOnlineRoute && syncedRegistros.isNotEmpty) {
-      polylines.add(
-        Polyline(
-          points: syncedRegistros
-              .map((r) => LatLng(r.latitud, r.longitud))
-              .toList(),
-          color: Colors.green.shade600,
-          strokeWidth: 3.5,
-          strokeCap: StrokeCap.round,
-          strokeJoin: StrokeJoin.round,
-        ),
-      );
-    }
+    // Construir segmentos conectando puntos consecutivos
+    // con el color según el estado de cada segmento
+    for (int i = 0; i < sortedRegistros.length - 1; i++) {
+      final current = sortedRegistros[i];
+      final next = sortedRegistros[i + 1];
+      
+      // El color del segmento depende del punto de destino
+      final isOfflineSegment = next.fueOffline;
+      
+      if (isOfflineSegment && !showOfflineRoute) continue;
+      if (!isOfflineSegment && !showOnlineRoute) continue;
 
-    // Polyline para registros pendientes (ruta offline)
-    if (showOfflineRoute && pendingRegistros.isNotEmpty) {
       polylines.add(
         Polyline(
-          points: pendingRegistros
-              .map((r) => LatLng(r.latitud, r.longitud))
-              .toList(),
-          color: Colors.orange.shade500,
-          strokeWidth: 3.5,
-          pattern: StrokePattern.dashed(segments: const [5, 5]),
+          points: [
+            LatLng(current.latitud, current.longitud),
+            LatLng(next.latitud, next.longitud),
+          ],
+          color: isOfflineSegment 
+              ? Colors.orange.shade500 
+              : Colors.green.shade600,
+          strokeWidth: 4.0,
+          pattern: isOfflineSegment 
+              ? StrokePattern.dashed(segments: const [8, 6])
+              : StrokePattern.solid(),
           strokeCap: StrokeCap.round,
           strokeJoin: StrokeJoin.round,
         ),
@@ -71,12 +68,77 @@ class RouteLayer extends StatelessWidget {
   }
 }
 
+/// Widget para mostrar flechas de dirección en la ruta
+class RouteArrowsLayer extends StatelessWidget {
+  final List<Registro> registros;
+
+  const RouteArrowsLayer({
+    Key? key,
+    required this.registros,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    if (registros.length < 2) return const SizedBox.shrink();
+
+    final sortedRegistros = List<Registro>.from(registros)
+      ..sort((a, b) => a.hora.compareTo(b.hora));
+
+    final markers = <Marker>[];
+    
+    // Agregar flechas cada 2-3 puntos para indicar dirección
+    for (int i = 1; i < sortedRegistros.length - 1; i += 2) {
+      final prev = sortedRegistros[i - 1];
+      final current = sortedRegistros[i];
+      
+      // Calcular ángulo de dirección
+      final angle = _calculateBearing(
+        prev.latitud, prev.longitud,
+        current.latitud, current.longitud,
+      );
+      
+      final isOffline = current.fueOffline;
+
+      markers.add(
+        Marker(
+          point: LatLng(current.latitud, current.longitud),
+          width: 24,
+          height: 24,
+          child: Transform.rotate(
+            angle: angle,
+            child: Icon(
+              Icons.navigation_rounded,
+              color: isOffline ? Colors.orange.shade700 : Colors.green.shade700,
+              size: 20,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return MarkerLayer(markers: markers);
+  }
+
+  double _calculateBearing(double lat1, double lon1, double lat2, double lon2) {
+    final dLon = (lon2 - lon1) * math.pi / 180;
+    final lat1Rad = lat1 * math.pi / 180;
+    final lat2Rad = lat2 * math.pi / 180;
+
+    final y = math.sin(dLon) * math.cos(lat2Rad);
+    final x = math.cos(lat1Rad) * math.sin(lat2Rad) -
+        math.sin(lat1Rad) * math.cos(lat2Rad) * math.cos(dLon);
+
+    return math.atan2(y, x);
+  }
+}
+
 /// Widget para mostrar los marcadores de cada punto en la ruta
 class RoutePointsMarker extends StatelessWidget {
   final List<Registro> registros;
   final Function(Registro)? onTap;
   final bool showOnlinePoints;
   final bool showOfflinePoints;
+  final bool showNumbers;
 
   const RoutePointsMarker({
     Key? key,
@@ -84,6 +146,7 @@ class RoutePointsMarker extends StatelessWidget {
     this.onTap,
     this.showOnlinePoints = true,
     this.showOfflinePoints = true,
+    this.showNumbers = true,
   }) : super(key: key);
 
   @override
@@ -93,81 +156,143 @@ class RoutePointsMarker extends StatelessWidget {
   }
 
   List<Marker> _buildMarkers() {
-    return registros
+    if (registros.isEmpty) return [];
+    
+    // Ordenar por hora para numeración correcta
+    final sortedRegistros = List<Registro>.from(registros)
+      ..sort((a, b) => a.hora.compareTo(b.hora));
+    
+    return sortedRegistros
         .asMap()
         .entries
         .where((entry) {
-          final isSynced = entry.value.isSynced;
-          if (isSynced) return showOnlinePoints;
+          final wasOffline = entry.value.fueOffline;
+          if (!wasOffline) return showOnlinePoints;
           return showOfflinePoints;
         })
         .map((entry) {
           final index = entry.key;
           final registro = entry.value;
-          final isSynced = registro.isSynced;
+          final wasOffline = registro.fueOffline;
           final isFirst = index == 0;
-          final isLast = index == registros.length - 1;
+          final isLast = index == sortedRegistros.length - 1;
+          final pointNumber = index + 1;
 
+          // Marcadores de inicio y fin más grandes
+          if (isFirst || isLast) {
+            return Marker(
+              point: LatLng(registro.latitud, registro.longitud),
+              width: 56,
+              height: 56,
+              child: GestureDetector(
+                onTap: () => onTap?.call(registro),
+                child: _buildSpecialMarker(isFirst, isLast, pointNumber),
+              ),
+            );
+          }
+
+          // Marcadores intermedios con número
           return Marker(
             point: LatLng(registro.latitud, registro.longitud),
-            width: 40,
-            height: 40,
+            width: 32,
+            height: 32,
             child: GestureDetector(
               onTap: () => onTap?.call(registro),
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _getPointColor(isSynced, isFirst, isLast),
-                  border: Border.all(
-                    color: Colors.white,
-                    width: 2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _getPointColor(isSynced, isFirst, isLast)
-                          .withOpacity(0.4),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: _getPointIcon(isFirst, isLast, isSynced),
-                ),
-              ),
+              child: _buildNumberedMarker(pointNumber, wasOffline),
             ),
           );
         })
         .toList();
   }
 
-  Color _getPointColor(bool isSynced, bool isFirst, bool isLast) {
-    if (isFirst) {
-      return Colors.blue.shade600; // Punto de inicio
-    } else if (isLast) {
-      return Colors.red.shade600; // Punto final
-    } else {
-      return isSynced 
-          ? Colors.green.shade500 
-          : Colors.orange.shade500;
-    }
+  Widget _buildSpecialMarker(bool isFirst, bool isLast, int number) {
+    final color = isFirst ? Colors.green.shade600 : Colors.red.shade600;
+    final icon = isFirst ? Icons.flag_rounded : Icons.sports_score_rounded;
+    final label = isFirst ? 'INICIO' : 'FIN';
+    
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.4),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 8,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color,
+            border: Border.all(color: Colors.white, width: 3),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.4),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Icon(icon, color: Colors.white, size: 20),
+        ),
+      ],
+    );
   }
 
-  Widget _getPointIcon(bool isFirst, bool isLast, bool isSynced) {
-    if (isFirst) {
-      return const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 18);
-    } else if (isLast) {
-      return const Icon(Icons.stop_rounded, color: Colors.white, size: 18);
-    } else {
-      return Container(
-        width: 6,
-        height: 6,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-        ),
-      );
-    }
+  Widget _buildNumberedMarker(int number, bool wasOffline) {
+    final color = wasOffline ? Colors.orange.shade500 : Colors.green.shade500;
+    
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color,
+        border: Border.all(color: Colors.white, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.4),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Center(
+        child: showNumbers && number <= 99
+            ? Text(
+                '$number',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              )
+            : Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+              ),
+      ),
+    );
   }
 }
 

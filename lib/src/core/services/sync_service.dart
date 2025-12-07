@@ -167,18 +167,19 @@ class SyncService {
     String? horaPersonalizada,
   }) async {
     try {
+      final isOnline = await _network.isOnline();
+      
       final registro = Registro(
         hora: horaPersonalizada ?? DateTime.now().toIso8601String(),
         latitud: latitud,
         longitud: longitud,
         hijoId: hijoId,
         isSynced: false,
+        fueOffline: !isOnline, // Marcar si fue capturado offline
       );
 
-      final isOnline = await _network.isOnline();
-
       if (isOnline) {
-        print('🌐 Enviando ubicación al backend (ONLINE)');
+        print('🌐 Enviando ubicación al backend (ONLINE, fueOffline: false)');
         final success = await _api.enviarRegistroIndividual(registro);
 
         if (success) {
@@ -186,11 +187,12 @@ class SyncService {
           return true;
         } else {
           print('⚠️ Fallo envío. Guardando localmente para reintentar');
-          await _sqlite.insertRegistro(registro);
+          // Aunque falló, fue intento online, mantenemos fueOffline como estaba
+          await _sqlite.insertRegistro(registro.copyWith(fueOffline: true));
           return false;
         }
       } else {
-        print('📵 OFFLINE - Guardando ubicación localmente');
+        print('📵 OFFLINE - Guardando ubicación localmente (fueOffline: true)');
         await _sqlite.insertRegistro(registro);
         return true;
       }

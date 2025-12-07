@@ -12,7 +12,7 @@ class RegistroSQLite {
 
   static const String _tableName = 'registros';
   static const String _dbName = 'safesteps.db';
-  static const int _dbVersion = 1;
+  static const int _dbVersion = 2; // v2: agregó columna fueOffline
 
   Future<Database> get database async {
     _database ??= await _initDB();
@@ -46,6 +46,7 @@ class RegistroSQLite {
         longitud REAL NOT NULL,
         hijoId TEXT NOT NULL,
         isSynced INTEGER DEFAULT 0,
+        fueOffline INTEGER DEFAULT 0,
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP
       )
       ''',
@@ -63,7 +64,12 @@ class RegistroSQLite {
   /// Manejo de migraciones en futuras versiones
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     print('🔄 Upgrading database from $oldVersion to $newVersion');
-    // Aquí irían las migraciones en el futuro
+    
+    // Migración v1 → v2: agregar columna fueOffline
+    if (oldVersion < 2) {
+      print('📦 Migrando a v2: agregando columna fueOffline');
+      await db.execute('ALTER TABLE $_tableName ADD COLUMN fueOffline INTEGER DEFAULT 0');
+    }
   }
 
   /// Inserta un nuevo registro en la BD local
