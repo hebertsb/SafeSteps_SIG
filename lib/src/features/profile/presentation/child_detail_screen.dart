@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/services/socket_provider.dart';
 import '../../map/domain/entities/child.dart';
 import '../../map/presentation/providers/children_provider.dart';
 
@@ -16,6 +18,64 @@ class ChildDetailScreen extends ConsumerStatefulWidget {
 
 class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
   bool _isRegenerating = false;
+  late Child _liveChild;
+  StreamSubscription? _locationSub;
+  StreamSubscription? _statusSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _liveChild = widget.child;
+    _setupSocketListeners();
+  }
+
+  @override
+  void dispose() {
+    _locationSub?.cancel();
+    _statusSub?.cancel();
+    super.dispose();
+  }
+
+  void _setupSocketListeners() {
+    final socketService = ref.read(socketServiceProvider);
+    
+    // Listen for location updates
+    _locationSub = socketService.locationStream.listen((data) {
+      if (mounted && data['childId'].toString() == widget.child.id) {
+        final newDevice = data['device'] as String? ?? 'Unknown';
+        setState(() {
+          _liveChild = _liveChild.copyWith(
+            latitude: (data['lat'] as num).toDouble(),
+            longitude: (data['lng'] as num).toDouble(),
+            battery: (data['battery'] as num).toDouble(),
+            status: 'online',
+            device: newDevice != 'Unknown' ? newDevice : _liveChild.device,
+            lastUpdated: DateTime.now(),
+          );
+        });
+      }
+    });
+
+    // Listen for status changes
+    _statusSub = socketService.statusStream.listen((data) {
+      if (mounted && data['childId'].toString() == widget.child.id) {
+        final isOnline = data['online'] as bool;
+        final newDevice = data['device'] as String? ?? 'Unknown';
+        setState(() {
+          _liveChild = _liveChild.copyWith(
+            status: isOnline ? 'online' : 'offline',
+            device: newDevice != 'Unknown' ? newDevice : _liveChild.device,
+            lastUpdated: DateTime.now(),
+          );
+        });
+      }
+    });
+
+    // Join the child's room if not already
+    if (socketService.isConnected) {
+      socketService.joinChildRoom(widget.child.id);
+    }
+  }
 
   Future<void> _regenerateCode() async {
     // Mostrar confirmación
@@ -270,7 +330,7 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: widget.child.status == 'online'
+                      color: _liveChild.status == 'online'
                           ? Colors.green.shade50
                           : Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(20),
@@ -281,17 +341,17 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
                         Icon(
                           Icons.circle,
                           size: 8,
-                          color: widget.child.status == 'online'
+                          color: _liveChild.status == 'online'
                               ? Colors.green.shade700
                               : Colors.grey,
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          widget.child.status == 'online'
+                          _liveChild.status == 'online'
                               ? 'En línea'
                               : 'Desconectado',
                           style: TextStyle(
-                            color: widget.child.status == 'online'
+                            color: _liveChild.status == 'online'
                                 ? Colors.green.shade700
                                 : Colors.grey,
                             fontSize: 12,
@@ -315,13 +375,13 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
                   _buildInfoRow(
                     Icons.phone_android,
                     'Dispositivo',
-                    widget.child.device,
+                    _liveChild.device,
                   ),
                   const SizedBox(height: 12),
                   _buildInfoRow(
                     Icons.battery_std,
                     'Batería',
-                    '${widget.child.battery.toStringAsFixed(0)}%',
+                    '${_liveChild.battery.toStringAsFixed(0)}%',
                   ),
                 ],
               ),

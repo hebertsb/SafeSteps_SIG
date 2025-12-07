@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:battery_plus/battery_plus.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -39,14 +41,19 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
   final Battery _battery = Battery();
   int _batteryLevel = 0;
   StreamSubscription<BatteryState>? _batterySubscription;
+  
+  // Device info
+  String _deviceName = 'Unknown';
 
   @override
   void initState() {
     super.initState();
     _initBattery();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!_isInitialized) {
         _isInitialized = true;
+        // Wait for device info before starting location tracking
+        await _initDeviceInfo();
         _startLocationTracking();
       }
     });
@@ -66,6 +73,23 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
       _batteryLevel = 100;
     }
     if (mounted) setState(() {});
+  }
+  
+  Future<void> _initDeviceInfo() async {
+    try {
+      final deviceInfo = DeviceInfoPlugin();
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfo.androidInfo;
+        _deviceName = '${androidInfo.brand} ${androidInfo.model}';
+      } else if (Platform.isIOS) {
+        final iosInfo = await deviceInfo.iosInfo;
+        _deviceName = iosInfo.name ?? iosInfo.model;
+      }
+      print('📱 Device name: $_deviceName');
+    } catch (e) {
+      print('Error getting device info: $e');
+      _deviceName = 'Unknown';
+    }
   }
 
   @override
@@ -265,7 +289,8 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
             position.latitude, 
             position.longitude, 
             _batteryLevel.toDouble(),
-            'Activo'
+            'Activo',
+            device: _deviceName,
           );
           
           // Also send via HTTP to trigger backend zone detection with PostGIS

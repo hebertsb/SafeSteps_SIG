@@ -112,15 +112,17 @@ class SocketService {
     double lat,
     double lng,
     double battery,
-    String status,
-  ) {
+    String status, {
+    String device = 'Unknown',
+  }) {
     if (_socket != null && _socket!.connected) {
-      print('📤 Emitting updateLocation: $lat, $lng');
+      print('📤 Emitting updateLocation: $lat, $lng (device: $device)');
       _socket!.emit('updateLocation', {
         'lat': lat,
         'lng': lng,
         'battery': battery,
         'status': status,
+        'device': device,
       });
     } else {
       print('❌ Cannot emit location: Socket not connected');

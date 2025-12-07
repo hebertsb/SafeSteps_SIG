@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -20,8 +21,9 @@ class MapScreen extends ConsumerStatefulWidget {
 
 class _MapScreenState extends ConsumerState<MapScreen> {
   final Map<String, Child> _liveChildren = {};
-  final Set<String> _joinedChildRooms = {}; // Track which rooms we've joined
-  bool _socketConnected = false;
+  final Set<String> _joinedChildRooms = {};
+  final MapController _mapController = MapController();
+  Child? _selectedChild;
 
   @override
   void initState() {
@@ -36,34 +38,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     if (token != null) {
       socketService.connect(token);
       
-      // Wait for connection to ensure we can join rooms
       int retries = 0;
       while (!socketService.isConnected && retries < 10) {
         await Future.delayed(const Duration(milliseconds: 500));
         retries++;
       }
 
-      // Re-trigger room joining
       final childrenAsync = ref.read(childrenProvider);
       childrenAsync.whenData((children) {
         if (socketService.isConnected) {
-          print('🔗 Joining rooms for ${children.length} children:');
           for (var child in children) {
             if (!_joinedChildRooms.contains(child.id)) {
-              print('🔗   - Child "${child.name}" with ID: "${child.id}"');
               socketService.joinChildRoom(child.id);
               _joinedChildRooms.add(child.id);
             }
           }
-          _socketConnected = true;
         }
       });
       
-      // Listen for location updates from children
-      // Note: Zone detection is handled by the backend with PostGIS
-      // The backend sends FCM notifications when a child enters/exits a zone
       socketService.locationStream.listen((data) {
-        print('📍 Location update received in MapScreen: $data');
         if (mounted) {
           setState(() {
             final childId = data['childId'].toString();
@@ -75,43 +68,48 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               final childIndex = children.indexWhere((c) => c.id == childId);
               if (childIndex != -1) {
                 final originalChild = children[childIndex];
+                final device = data['device'] as String? ?? 'Unknown';
                 _liveChildren[childId] = originalChild.copyWith(
                   latitude: lat,
                   longitude: lng,
                   battery: (data['battery'] as num).toDouble(),
-                  status: data['status'] as String,
+                  status: 'online', // Mark as online when receiving location
+                  device: device,
+                  lastUpdated: DateTime.now(),
                 );
-                print('📍 Updated _liveChildren[$childId] with new location');
               }
             });
           });
         }
       });
 
-      // Listen for child status changes (online/offline)
       socketService.statusStream.listen((data) {
-        print('👶 Status change received in MapScreen: $data');
         if (mounted) {
           setState(() {
             final childId = data['childId'].toString();
             final isOnline = data['online'] as bool;
+            final newDevice = data['device'] as String? ?? 'Unknown';
             
-            // Actualizar el estado del hijo en _liveChildren
             if (_liveChildren.containsKey(childId)) {
+              final currentDevice = _liveChildren[childId]!.device;
+              // Only update device if new value is not Unknown, or current is Unknown
+              final deviceToUse = (newDevice != 'Unknown') ? newDevice : currentDevice;
+              
               _liveChildren[childId] = _liveChildren[childId]!.copyWith(
                 status: isOnline ? 'online' : 'offline',
+                device: deviceToUse,
+                lastUpdated: DateTime.now(),
               );
-              print('👶 Updated status for child $childId: ${isOnline ? "online" : "offline"}');
             } else {
-              // Si no está en _liveChildren, buscarlo en children y agregarlo
               final childrenAsync = ref.read(childrenProvider);
               childrenAsync.whenData((children) {
                 final childIndex = children.indexWhere((c) => c.id == childId);
                 if (childIndex != -1) {
                   _liveChildren[childId] = children[childIndex].copyWith(
                     status: isOnline ? 'online' : 'offline',
+                    device: newDevice,
+                    lastUpdated: DateTime.now(),
                   );
-                  print('👶 Added child $childId to _liveChildren with status: ${isOnline ? "online" : "offline"}');
                 }
               });
             }
@@ -119,9 +117,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         }
       });
 
-      // Listen for panic alerts
       socketService.panicStream.listen((data) {
-        print('🚨 Panic alert received in MapScreen: $data');
         if (mounted) {
           _showPanicAlert(data);
         }
@@ -184,10 +180,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   @override
   void dispose() {
+    _mapController.dispose();
     super.dispose();
   }
 
-  /// Construye la capa de polígonos para las zonas seguras
   Widget _buildSafeZonesLayer(AsyncValue<List<SafeZone>> safeZonesAsync) {
     return safeZonesAsync.when(
       data: (zones) => PolygonLayer(
@@ -195,16 +191,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             .where((zone) => zone.points.isNotEmpty)
             .map((zone) => Polygon(
                   points: zone.points,
-                  color: zone.displayColor.withOpacity(0.3),
+                  color: zone.displayColor.withOpacity(0.25),
                   borderColor: zone.displayColor,
-                  borderStrokeWidth: 2,
+                  borderStrokeWidth: 2.5,
                   isFilled: true,
-                  label: zone.name,
-                  labelStyle: TextStyle(
-                    color: zone.displayColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
                 ))
             .toList(),
       ),
@@ -213,19 +203,43 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 
+  void _showChildInfoPopup(Child child) {
+    HapticFeedback.lightImpact();
+    setState(() => _selectedChild = child);
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => _ChildInfoSheet(
+        child: child,
+        onClose: () {
+          Navigator.pop(context);
+          setState(() => _selectedChild = null);
+        },
+        onCenterMap: () {
+          Navigator.pop(context);
+          _mapController.move(
+            LatLng(child.latitude, child.longitude),
+            15.0,
+          );
+        },
+      ),
+    ).whenComplete(() {
+      setState(() => _selectedChild = null);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Parent View - Map with children locations
     final childrenAsync = ref.watch(childrenProvider);
     final socketService = ref.watch(socketServiceProvider);
     final safeZonesAsync = ref.watch(safeZonesProvider);
 
-    // Verificar si hay nuevos hijos para unirse a sus salas
     childrenAsync.whenData((children) {
       if (socketService.isConnected) {
         for (var child in children) {
           if (!_joinedChildRooms.contains(child.id)) {
-            print('🔗 Joining room for child: "${child.name}" ID: "${child.id}"');
             socketService.joinChildRoom(child.id);
             _joinedChildRooms.add(child.id);
           }
@@ -234,42 +248,68 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     });
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('SafeSteps', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            Text('Ubicación en tiempo real', style: TextStyle(fontSize: 12)),
-          ],
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.location_on, color: Colors.white, size: 20),
+              SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('SafeSteps', 
+                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                  Text('En tiempo real', 
+                       style: TextStyle(fontSize: 10, color: Colors.white70)),
+                ],
+              ),
+            ],
+          ),
         ),
         actions: [
-          // Botón de refresh para actualizar lista de hijos
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Actualizar hijos',
-            onPressed: () {
-              ref.invalidate(childrenProvider);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Actualizando lista de hijos...'),
-                  duration: Duration(seconds: 1),
-                ),
-              );
-            },
-          ),
+          // Connection status indicator
           Container(
             margin: const EdgeInsets.only(right: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: socketService.isConnected ? Colors.green : Colors.red,
+              color: socketService.isConnected 
+                  ? Colors.green.withOpacity(0.9) 
+                  : Colors.red.withOpacity(0.9),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.circle, color: Colors.white, size: 8),
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
                 const SizedBox(width: 6),
-                Text(socketService.isConnected ? 'En línea' : 'Desconectado', 
-                     style: const TextStyle(color: Colors.white, fontSize: 12)),
+                Text(
+                  socketService.isConnected ? 'En línea' : 'Offline', 
+                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                ),
               ],
             ),
           ),
@@ -277,64 +317,64 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       ),
       body: childrenAsync.when(
         data: (children) {
-          // DEBUG: Log de hijos cargados
-          print('🗺️ Children loaded from API: ${children.length}');
-          for (var c in children) {
-            print('   - "${c.name}" ID: "${c.id}" lat: ${c.latitude}, lng: ${c.longitude}');
-          }
-          print('🗺️ Live children updates: ${_liveChildren.keys.toList()}');
-          
-          // Filtrar hijos con ubicación válida y aplicar datos en tiempo real
           final List<Child> displayChildren = children
               .map((child) {
                 if (_liveChildren.containsKey(child.id)) {
-                  final liveChild = _liveChildren[child.id]!;
-                  print('🗺️ Using LIVE data for "${child.name}" (ID: ${child.id}): ${liveChild.latitude}, ${liveChild.longitude}');
-                  return liveChild;
+                  return _liveChildren[child.id]!;
                 }
-                // Mark as offline if no live data received yet
                 return child.copyWith(status: 'offline');
               })
-              // Solo mostrar hijos con ubicación válida (lat y lng diferentes de 0)
               .where((child) => child.latitude != 0 || child.longitude != 0)
               .toList();
 
-          return Column(
+          // Center map on first child with valid location
+          LatLng initialCenter = const LatLng(-17.7833, -63.1821);
+          if (displayChildren.isNotEmpty) {
+            initialCenter = LatLng(displayChildren.first.latitude, displayChildren.first.longitude);
+          }
+
+          return Stack(
             children: [
-              // Mapa - Ocupa solo la mitad superior
-              SizedBox(
-                height: MediaQuery.of(context).size.height * 0.45,
-                child: FlutterMap(
-                  options: const MapOptions(
-                    initialCenter: LatLng(-17.7833, -63.1821), // Santa Cruz
-                    initialZoom: 14.0,
+              // Full screen map
+              FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: initialCenter,
+                  initialZoom: 15.0,
+                  interactionOptions: const InteractionOptions(
+                    flags: InteractiveFlag.all,
                   ),
-                  children: [
-                    TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.safesteps.safe_steps_mobile',
-                    ),
-                    // Capa de zonas seguras (polígonos)
-                    _buildSafeZonesLayer(safeZonesAsync),
-                    MarkerLayer(
-                      markers: displayChildren.map((child) {
-                        final isOffline = child.status == 'offline';
-                        return Marker(
-                          point: LatLng(child.latitude, child.longitude),
-                          width: 80,
-                          height: 100,
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.safesteps.safe_steps_mobile',
+                  ),
+                  _buildSafeZonesLayer(safeZonesAsync),
+                  MarkerLayer(
+                    markers: displayChildren.map((child) {
+                      final isOffline = child.status == 'offline';
+                      final isSelected = _selectedChild?.id == child.id;
+                      
+                      return Marker(
+                        point: LatLng(child.latitude, child.longitude),
+                        width: 90,
+                        height: 110,
+                        child: GestureDetector(
+                          onTap: () => _showChildInfoPopup(child),
                           child: Column(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              // Indicador de batería
+                              // Battery indicator
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(12),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.2),
-                                      blurRadius: 4,
+                                      color: Colors.black.withOpacity(0.15),
+                                      blurRadius: 6,
                                       offset: const Offset(0, 2),
                                     ),
                                   ],
@@ -343,35 +383,52 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(
-                                      Icons.battery_full,
+                                      child.battery > 80 ? Icons.battery_full :
+                                      child.battery > 50 ? Icons.battery_5_bar :
+                                      child.battery > 20 ? Icons.battery_3_bar :
+                                      Icons.battery_1_bar,
                                       size: 14,
-                                      color: isOffline ? Colors.grey : (child.battery > 20 ? Colors.green : Colors.red),
+                                      color: isOffline ? Colors.grey : 
+                                             (child.battery > 20 ? Colors.green : Colors.red),
                                     ),
-                                    const SizedBox(width: 4),
+                                    const SizedBox(width: 3),
                                     Text(
                                       '${child.battery.toInt()}%',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold,
-                                        color: Colors.black87,
+                                        color: isOffline ? Colors.grey : Colors.black87,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
                               const SizedBox(height: 4),
-                              // Marcador del niño
-                              Container(
-                                width: 50,
-                                height: 50,
+                              // Avatar marker
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                width: isSelected ? 58 : 52,
+                                height: isSelected ? 58 : 52,
                                 decoration: BoxDecoration(
-                                  color: isOffline ? Colors.grey : AppColors.primary,
+                                  gradient: isOffline 
+                                      ? LinearGradient(colors: [Colors.grey.shade400, Colors.grey.shade500])
+                                      : LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: [AppColors.primary, AppColors.primary.withOpacity(0.8)],
+                                        ),
                                   shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 3,
+                                  ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.2),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 2),
+                                      color: isOffline 
+                                          ? Colors.grey.withOpacity(0.3)
+                                          : AppColors.primary.withOpacity(0.4),
+                                      blurRadius: isSelected ? 12 : 8,
+                                      offset: const Offset(0, 4),
                                     ),
                                   ],
                                 ),
@@ -382,150 +439,94 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                   ),
                                 ),
                               ),
-                              // Nombre del niño
+                              // Name label
                               Container(
                                 margin: const EdgeInsets.only(top: 4),
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(10),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.1),
-                                      blurRadius: 2,
+                                      color: Colors.black.withOpacity(0.1),
+                                      blurRadius: 4,
                                     ),
                                   ],
                                 ),
-                                child: Text(
-                                  child.name,
-                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                ),
-              ),
-              
-              // Información debajo del mapa
-              Expanded(
-                child: Container(
-                  color: AppColors.background,
-                  padding: const EdgeInsets.all(16),
-                  child: ListView(
-                    children: [
-                      // Tarjeta de Ubicación Actual
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.location_on, color: AppColors.primary, size: 32),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Text(
-                                      'Ubicación Actual',
-                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                    Container(
+                                      width: 6,
+                                      height: 6,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: isOffline ? Colors.grey : Colors.green,
+                                      ),
                                     ),
-                                    const SizedBox(height: 4),
+                                    const SizedBox(width: 4),
                                     Text(
-                                      displayChildren.isNotEmpty ? 'Lat: ${displayChildren.first.latitude.toStringAsFixed(4)}, Lng: ${displayChildren.first.longitude.toStringAsFixed(4)}' : 'Sin ubicación',
-                                      style: const TextStyle(color: Colors.grey),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    const Text(
-                                      'Actualizado en tiempo real',
-                                      style: TextStyle(fontSize: 12, color: Colors.green),
+                                      child.name,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ],
                                 ),
                               ),
-                              // ... (rest of the card)
                             ],
                           ),
                         ),
-                      ),
-                      
-                      const SizedBox(height: 16),
-                      
-                      // Tarjetas de Zona y Estado
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  children: [
-                                    Icon(Icons.shield, color: Colors.green.shade700, size: 32),
-                                    const SizedBox(height: 8),
-                                    const Text('Zona', style: TextStyle(color: Colors.grey)),
-                                    const SizedBox(height: 4),
-                                    Text('Segura', style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  children: [
-                                    const Text('🏃', style: TextStyle(fontSize: 32)),
-                                    const SizedBox(height: 8),
-                                    const Text('Estado', style: TextStyle(color: Colors.grey)),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      displayChildren.isNotEmpty ? displayChildren.first.status : 'Desconocido',
-                                      style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
-                                    ),
-                                    ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      
-                      const SizedBox(height: 24),
-                      
-                      // Historial Reciente
-                      const Text(
-                        'Historial Reciente',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 12),
-                      
-                      _buildHistoryItem(
-                        icon: Icons.school,
-                        color: Colors.green,
-                        title: 'Escuela',
-                        time: '14:30 - 17:45',
-                        duration: '3 horas',
-                      ),
-                      
-                      const SizedBox(height: 8),
-                      
-                      _buildHistoryItem(
-                        icon: Icons.home,
-                        color: Colors.orange,
-                        title: 'Casa',
-                        time: '12:00 - 14:15',
-                        duration: '5 horas',
-                      ),
-                    ],
+                      );
+                    }).toList(),
                   ),
+                ],
+              ),
+              
+              // Refresh FAB
+              Positioned(
+                right: 16,
+                bottom: 140,
+                child: FloatingActionButton.small(
+                  heroTag: 'refresh',
+                  backgroundColor: Colors.white,
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    ref.invalidate(childrenProvider);
+                  },
+                  child: Icon(Icons.refresh_rounded, color: AppColors.primary),
                 ),
               ),
+              
+              // Center on children FAB
+              if (displayChildren.isNotEmpty)
+                Positioned(
+                  right: 16,
+                  bottom: 200,
+                  child: FloatingActionButton.small(
+                    heroTag: 'center',
+                    backgroundColor: Colors.white,
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      if (displayChildren.length == 1) {
+                        _mapController.move(
+                          LatLng(displayChildren.first.latitude, displayChildren.first.longitude),
+                          15.0,
+                        );
+                      } else {
+                        // Fit all children in view
+                        final bounds = LatLngBounds.fromPoints(
+                          displayChildren.map((c) => LatLng(c.latitude, c.longitude)).toList(),
+                        );
+                        _mapController.fitCamera(
+                          CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)),
+                        );
+                      }
+                    },
+                    child: Icon(Icons.my_location_rounded, color: AppColors.primary),
+                  ),
+                ),
             ],
           );
         },
@@ -534,54 +535,251 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       ),
     );
   }
-  
-  Widget _buildHistoryItem({
-    required IconData icon,
-    required Color color,
-    required String title,
-    required String time,
-    required String duration,
-  }) {
+}
+
+class _ChildInfoSheet extends StatelessWidget {
+  final Child child;
+  final VoidCallback onClose;
+  final VoidCallback onCenterMap;
+
+  const _ChildInfoSheet({
+    required this.child,
+    required this.onClose,
+    required this.onCenterMap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isOnline = child.status == 'online';
+    
     return Container(
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
+          // Handle bar
           Container(
-            width: 10,
-            height: 10,
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          
+          // Child info row
+          Row(
+            children: [
+              // Avatar
+              Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isOnline 
+                        ? [AppColors.primary, AppColors.primary.withOpacity(0.8)]
+                        : [Colors.grey.shade400, Colors.grey.shade500],
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: (isOnline ? AppColors.primary : Colors.grey).withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  time,
-                  style: const TextStyle(color: Colors.grey, fontSize: 14),
+                child: Center(
+                  child: Text(child.emoji, style: const TextStyle(fontSize: 32)),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 16),
+              
+              // Name and status
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      child.name,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isOnline ? Colors.green.shade50 : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isOnline ? Colors.green : Colors.grey,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                isOnline ? 'En línea' : 'Desconectado',
+                                style: TextStyle(
+                                  color: isOnline ? Colors.green.shade700 : Colors.grey.shade600,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Close button
+              IconButton(
+                onPressed: onClose,
+                icon: const Icon(Icons.close_rounded),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.grey.shade100,
+                ),
+              ),
+            ],
           ),
-          Text(
-            duration,
-            style: const TextStyle(color: Colors.grey, fontSize: 14),
+          
+          const SizedBox(height: 20),
+          
+          // Stats row
+          Row(
+            children: [
+              _StatCard(
+                icon: Icons.battery_charging_full_rounded,
+                iconColor: child.battery > 20 ? Colors.green : Colors.red,
+                label: 'Batería',
+                value: '${child.battery.toInt()}%',
+              ),
+              const SizedBox(width: 12),
+              _StatCard(
+                icon: Icons.access_time_rounded,
+                iconColor: AppColors.primary,
+                label: 'Última vez',
+                value: _formatTime(child.lastUpdated),
+              ),
+              const SizedBox(width: 12),
+              _StatCard(
+                icon: Icons.phone_android_rounded,
+                iconColor: Colors.purple,
+                label: 'Dispositivo',
+                value: child.device.length > 8 ? '${child.device.substring(0, 8)}...' : child.device,
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Action button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onCenterMap,
+              icon: const Icon(Icons.my_location_rounded),
+              label: const Text('Centrar en mapa'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
+
+  String _formatTime(DateTime? time) {
+    if (time == null) return 'N/A';
+    final now = DateTime.now();
+    final diff = now.difference(time);
+    
+    if (diff.inMinutes < 1) return 'Ahora';
+    if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes}m';
+    if (diff.inHours < 24) return 'Hace ${diff.inHours}h';
+    return 'Hace ${diff.inDays}d';
+  }
 }
+
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final String value;
+
+  const _StatCard({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: iconColor, size: 22),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

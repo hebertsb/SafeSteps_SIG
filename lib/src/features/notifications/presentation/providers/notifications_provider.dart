@@ -127,11 +127,17 @@ class NotificationsNotifier extends Notifier<List<AppNotification>> {
   }
 
   Future<void> removeNotification(String id) async {
+    // IMPORTANT: Optimistic update FIRST - Dismissible requires immediate removal
+    final removedNotification = state.firstWhere((n) => n.id == id, orElse: () => state.first);
+    state = state.where((n) => n.id != id).toList();
+    
     try {
       await _repository.deleteNotification(id);
-      state = state.where((n) => n.id != id).toList();
+      debugPrint('✅ Notification deleted from backend: $id');
     } catch (e) {
-      debugPrint('Error removing notification: $e');
+      debugPrint('⚠️ Error removing notification from backend: $e');
+      // Optionally revert if backend fails (but usually we keep it removed from UI)
+      // state = [removedNotification, ...state];
     }
   }
 }
