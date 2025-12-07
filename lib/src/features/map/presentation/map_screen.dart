@@ -11,6 +11,11 @@ import '../../../core/services/secure_storage_service.dart';
 import '../domain/entities/child.dart';
 import '../../zones/presentation/providers/safe_zones_provider.dart';
 import '../../zones/domain/entities/safe_zone.dart';
+import '../../../core/models/registro.dart';
+import '../../../core/services/sync_service.dart';
+import '../providers/location_history_provider.dart';
+import '../widgets/location_history_panel.dart';
+import '../widgets/route_layer.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -24,6 +29,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   final Set<String> _joinedChildRooms = {};
   final MapController _mapController = MapController();
   Child? _selectedChild;
+  bool _showOfflineRoute = true;
+  bool _showOnlineRoute = true;
+  Map<String, List<Registro>> _locationHistory = {};
+  bool _isLoadingHistory = false;
 
   @override
   void initState() {
@@ -203,9 +212,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 
-  void _showChildInfoPopup(Child child) {
+  void _showChildInfoPopup(Child child) async {
     HapticFeedback.lightImpact();
-    setState(() => _selectedChild = child);
+    setState(() {
+      _selectedChild = child;
+      _isLoadingHistory = true;
+    });
+    
+    // Cargar el historial de ubicaciones
+    await _loadLocationHistory(child.id);
+    
+    if (!mounted) return;
     
     showModalBottomSheet(
       context: context,
@@ -213,6 +230,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       isScrollControlled: true,
       builder: (context) => _ChildInfoSheet(
         child: child,
+        locationHistory: _locationHistory[child.id] ?? [],
+        isLoadingHistory: _isLoadingHistory,
         onClose: () {
           Navigator.pop(context);
           setState(() => _selectedChild = null);
@@ -224,10 +243,32 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             15.0,
           );
         },
+        onCenterOnPoint: (registro) {
+          Navigator.pop(context);
+          _mapController.move(
+            LatLng(registro.latitud, registro.longitud),
+            17.0,
+          );
+        },
       ),
     ).whenComplete(() {
       setState(() => _selectedChild = null);
     });
+  }
+
+  Future<void> _loadLocationHistory(String hijoId) async {
+    try {
+      final syncService = SyncService();
+      final registros = await syncService.obtenerPendientesByHijo(hijoId);
+      
+      setState(() {
+        _locationHistory[hijoId] = registros;
+        _isLoadingHistory = false;
+      });
+    } catch (e) {
+      print('Error loading location history: $e');
+      setState(() => _isLoadingHistory = false);
+    }
   }
 
   @override
@@ -351,6 +392,23 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     userAgentPackageName: 'com.safesteps.safe_steps_mobile',
                   ),
                   _buildSafeZonesLayer(safeZonesAsync),
+                  
+                  // Mostrar rutas del niño seleccionado
+                  if (_selectedChild != null && _locationHistory.containsKey(_selectedChild!.id))
+                    RouteLayer(
+                      registros: _locationHistory[_selectedChild!.id] ?? [],
+                      showOfflineRoute: _showOfflineRoute,
+                      showOnlineRoute: _showOnlineRoute,
+                    ),
+                  
+                  // Mostrar puntos de ruta del niño seleccionado
+                  if (_selectedChild != null && _locationHistory.containsKey(_selectedChild!.id))
+                    RoutePointsMarker(
+                      registros: _locationHistory[_selectedChild!.id] ?? [],
+                      showOfflinePoints: _showOfflineRoute,
+                      showOnlinePoints: _showOnlineRoute,
+                    ),
+                  
                   MarkerLayer(
                     markers: displayChildren.map((child) {
                       final isOffline = child.status == 'offline';
@@ -541,11 +599,17 @@ class _ChildInfoSheet extends StatelessWidget {
   final Child child;
   final VoidCallback onClose;
   final VoidCallback onCenterMap;
+  final List<Registro> locationHistory;
+  final bool isLoadingHistory;
+  final void Function(Registro)? onCenterOnPoint;
 
   const _ChildInfoSheet({
     required this.child,
     required this.onClose,
     required this.onCenterMap,
+    this.locationHistory = const [],
+    this.isLoadingHistory = false,
+    this.onCenterOnPoint,
   });
 
   @override
@@ -717,6 +781,18 @@ class _ChildInfoSheet extends StatelessWidget {
                 ),
               ),
             ),
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Location history panel
+          LocationHistoryPanel(
+            hijoId: child.id,
+            childName: child.name,
+            childEmoji: child.emoji,
+            registros: locationHistory,
+            isLoadingHistory: isLoadingHistory,
+            onCenterOnPoint: onCenterOnPoint,
           ),
         ],
       ),
