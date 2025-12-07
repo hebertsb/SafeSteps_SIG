@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../core/theme/app_colors.dart';
@@ -11,7 +10,6 @@ import '../../../core/services/secure_storage_service.dart';
 import '../../../core/services/background_location_service.dart';
 import '../../../core/providers/location_provider.dart';
 import '../../auth/presentation/providers/auth_provider.dart';
-import '../../../core/providers/location_provider.dart';
 import '../../sos/presentation/widgets/sos_button.dart';
 
 class ChildHomeScreen extends ConsumerStatefulWidget {
@@ -43,6 +41,14 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
       }
     });
   }
+
+  @override
+  void dispose() {
+    print('🗑️ Disposing child home screen for child: $_currentChildId');
+    _positionSubscription?.cancel();
+    _positionSubscription = null;
+    super.dispose();
+  }
   
   void _safeSetState(VoidCallback fn) {
     if (mounted) {
@@ -69,18 +75,6 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
     await Future.delayed(const Duration(milliseconds: 300));
     
     socketService.disconnect();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final currentUser = ref.watch(currentUserProvider);
-    final trackingState = ref.watch(locationTrackingProvider);
-    final lastLocation = ref.watch(lastLocationProvider);
-  void dispose() {
-    print('🗑️ Disposing child home screen for child: $_currentChildId');
-    _positionSubscription?.cancel();
-    _positionSubscription = null;
-    super.dispose();
   }
 
   Future<void> _startLocationTracking() async {
