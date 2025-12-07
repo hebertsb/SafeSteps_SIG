@@ -36,6 +36,8 @@ class RemoteNotificationsDataSourceImpl
     );
   }
 
+
+
   @override
   Future<List<AppNotification>> getNotifications({
     int limit = 20,
@@ -58,6 +60,7 @@ class RemoteNotificationsDataSourceImpl
     ).replace(queryParameters: queryParams);
 
     try {
+      print('🔍 Fetching notifications from: $uri');
       final response = await client.get(
         uri,
         headers: {
@@ -66,13 +69,40 @@ class RemoteNotificationsDataSourceImpl
         },
       );
 
+      print('🔍 Response status: ${response.statusCode}');
+      print('🔍 Response body: ${response.body}');
+
       if (response.statusCode == 200) {
-        final List<dynamic> jsonList = jsonDecode(response.body);
-        return jsonList.map((json) => AppNotification.fromJson(json)).toList();
+        final dynamic decodedJson = jsonDecode(response.body);
+        
+        List<dynamic> jsonList = [];
+
+        if (decodedJson is Map<String, dynamic>) {
+          if (decodedJson.containsKey('notifications') && decodedJson['notifications'] is List) {
+            jsonList = decodedJson['notifications'];
+          } else if (decodedJson.containsKey('data') && decodedJson['data'] is List) {
+             jsonList = decodedJson['data'];
+          } else {
+             // Fallback or empty
+             print('⚠️ Could not find notifications list in response');
+          }
+        } else if (decodedJson is List) {
+          jsonList = decodedJson;
+        }
+
+        return jsonList.map((json) {
+          try {
+            return AppNotification.fromJson(json);
+          } catch (e) {
+            print('❌ Error parsing notification item: $e');
+            return null; 
+          }
+        }).whereType<AppNotification>().toList(); // Filter out nulls
       } else {
         throw Exception('Failed to load notifications: ${response.statusCode}');
       }
     } catch (e) {
+      print('❌ Error fetching notifications: $e');
       throw Exception('Error fetching notifications: $e');
     }
   }
@@ -140,7 +170,7 @@ class RemoteNotificationsDataSourceImpl
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
-          'notificationIds': ids.map((id) => int.parse(id)).toList(),
+          'notificationIds': ids.map((id) => int.tryParse(id) ?? id).toList(),
         }),
       );
 

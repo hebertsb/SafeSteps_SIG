@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/foundation.dart';
 
@@ -52,10 +53,25 @@ class LocationService {
     final hasPermission = await requestPermission();
     if (!hasPermission) return;
 
-    const LocationSettings locationSettings = LocationSettings(
+    LocationSettings locationSettings = const LocationSettings(
       accuracy: LocationAccuracy.high,
-      distanceFilter: 10, // Update every 10 meters
+      distanceFilter: 10,
     );
+
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      locationSettings = AndroidSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+        forceLocationManager: true,
+        intervalDuration: const Duration(seconds: 10),
+        // Foreground notification config
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
+          notificationTitle: "SafeSteps Activo",
+          notificationText: "Compartiendo ubicación en tiempo real",
+          enableWakeLock: true,
+        ),
+      );
+    }
 
     _positionStreamSubscription = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
       (Position position) {

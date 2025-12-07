@@ -33,8 +33,14 @@ class NotificationsNotifier extends Notifier<List<AppNotification>> {
 
   Future<void> _fetchNotifications() async {
     try {
-      final notifications = await _repository.getNotifications();
-      state = notifications;
+      final backendNotifications = await _repository.getNotifications();
+      
+      // Preserve local notifications that are not in the backend list
+      final localNotifications = state.where((n) => n.isLocal).toList();
+      
+      // Merge: Local ones first (usually newer), then backend ones
+      // Avoid duplicates if backend eventually returns the same event (unlikely if IDs differ)
+      state = [...localNotifications, ...backendNotifications];
     } catch (e) {
       // Handle error silently or expose via another provider
       debugPrint('Error fetching notifications: $e');
@@ -50,27 +56,41 @@ class NotificationsNotifier extends Notifier<List<AppNotification>> {
   }
 
   Future<void> markAsRead(String id) async {
+    final notificationIndex = state.indexWhere((n) => n.id == id);
+    if (notificationIndex == -1) return;
+
+    final notification = state[notificationIndex];
+    
+    // Optimistic update
+    final updatedNotification = notification.copyWith(isRead: true);
+    final newState = List<AppNotification>.from(state);
+    newState[notificationIndex] = updatedNotification;
+    state = newState;
+
+    if (notification.isLocal) {
+      return;
+    }
+
     try {
       await _repository.markAsRead([id]);
-      state = [
-        for (final notification in state)
-          if (notification.id == id)
-            notification.copyWith(isRead: true)
-          else
-            notification,
-      ];
+      // Refresh unread count if needed
+      ref.refresh(unreadCountProvider);
     } catch (e) {
       debugPrint('Error marking notification as read: $e');
+      // Revert on error? For now, keep optimistic update as it's better UX
     }
   }
 
   Future<void> markAllAsRead() async {
+    // Optimistic update
+    state = [
+      for (final notification in state)
+        notification.copyWith(isRead: true),
+    ];
+
     try {
       await _repository.markAllAsRead();
-      state = [
-        for (final notification in state)
-          notification.copyWith(isRead: true),
-      ];
+      ref.refresh(unreadCountProvider);
     } catch (e) {
       debugPrint('Error marking all as read: $e');
     }

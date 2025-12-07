@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../core/theme/app_colors.dart';
@@ -9,6 +10,8 @@ import '../../../core/services/socket_provider.dart';
 import '../../../core/services/secure_storage_service.dart';
 import '../../../core/services/background_location_service.dart';
 import '../../auth/presentation/providers/auth_provider.dart';
+import '../../../core/providers/location_provider.dart';
+import '../../sos/presentation/widgets/sos_button.dart';
 
 class ChildHomeScreen extends ConsumerStatefulWidget {
   const ChildHomeScreen({super.key});
@@ -31,7 +34,6 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Defer initialization to avoid issues during widget build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_isInitialized) {
         _isInitialized = true;
@@ -72,6 +74,10 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
   }
 
   @override
+  Widget build(BuildContext context) {
+    final currentUser = ref.watch(currentUserProvider);
+    final trackingState = ref.watch(locationTrackingProvider);
+    final lastLocation = ref.watch(lastLocationProvider);
   void dispose() {
     print('🗑️ Disposing child home screen for child: $_currentChildId');
     _positionSubscription?.cancel();
@@ -300,10 +306,13 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
     final socketService = ref.watch(socketServiceProvider);
 
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('SafeSteps - Modo Hijo'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+        title: const Text('Modo Hijo', style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.primary,
+        elevation: 0,
         actions: [
           // Connection status indicator
           Container(
@@ -339,92 +348,211 @@ class _ChildHomeScreenState extends ConsumerState<ChildHomeScreen> {
           ),
         ],
       ),
-      body: Container(
-        padding: const EdgeInsets.all(24.0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // User Info
-            CircleAvatar(
-              radius: 40,
-              backgroundColor: AppColors.primary.withOpacity(0.1),
-              child: Text(
-                currentUser?.name.substring(0, 1).toUpperCase() ?? 'H',
-                style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.primary),
-              ),
+            // Header Profile
+            _buildProfileHeader(currentUser?.name ?? 'Hijo'),
+            const SizedBox(height: 30),
+
+            // Status Dashboard
+            _buildStatusDashboard(trackingState, lastLocation),
+            const SizedBox(height: 30),
+
+            // SOS Button
+            _buildSOSButton(
+              currentUser != null ? int.tryParse(currentUser.id) : null,
+              currentUser?.name,
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Hola, ${currentUser?.name ?? 'Hijo'}',
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            const SizedBox(height: 30),
+
+            // Action Buttons
+            _buildActionButtons(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileHeader(String name) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.primary.withOpacity(0.2), width: 2),
+          ),
+          child: CircleAvatar(
+            radius: 40,
+            backgroundColor: AppColors.primary.withOpacity(0.1),
+            child: Text(
+              name.substring(0, 1).toUpperCase(),
+              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.primary),
             ),
-            const SizedBox(height: 8),
-            
-            // Tracking Status
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: _isTracking ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: _isTracking ? Colors.green : Colors.orange,
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _isTracking ? Icons.location_on : Icons.location_searching,
-                    color: _isTracking ? Colors.green : Colors.orange,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _lastLocationStatus,
-                    style: TextStyle(
-                      color: _isTracking ? Colors.green : Colors.orange,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            // Show last coordinates if available
-            if (_lastLat != null && _lastLng != null) ...[
-              const SizedBox(height: 8),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Hola, $name',
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.green.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.green.withOpacity(0.3)),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.shield_outlined, size: 14, color: Colors.green),
+              SizedBox(width: 4),
               Text(
-                'Lat: ${_lastLat!.toStringAsFixed(6)}, Lng: ${_lastLng!.toStringAsFixed(6)}',
-                style: const TextStyle(color: Colors.grey, fontSize: 12),
+                'Protección Activa',
+                style: TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w600),
               ),
             ],
-            
-            const SizedBox(height: 48),
-            
-            // Panic Button
-            SizedBox(
-              width: 200,
-              height: 200,
-              child: ElevatedButton(
-                onPressed: _sendPanicAlert,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  shape: const CircleBorder(),
-                  elevation: 8,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusDashboard(AsyncValue<void> trackingState, DateTime? lastUpdate) {
+    final isTracking = !trackingState.isLoading && !trackingState.hasError;
+    
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildStatusItem(
+                icon: isTracking ? Icons.gps_fixed : Icons.gps_off,
+                color: isTracking ? Colors.blue : Colors.grey,
+                label: 'GPS',
+                value: isTracking ? 'Activo' : 'Inactivo',
+              ),
+              _buildVerticalDivider(),
+              _buildStatusItem(
+                icon: Icons.access_time,
+                color: Colors.orange,
+                label: 'Última vez',
+                value: lastUpdate != null 
+                  ? DateFormat('HH:mm:ss').format(lastUpdate)
+                  : '--:--',
+              ),
+              _buildVerticalDivider(),
+              _buildStatusItem(
+                icon: Icons.battery_std,
+                color: Colors.green,
+                label: 'Batería',
+                value: '95%', // TODO: Get real battery level
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          const Divider(),
+          const SizedBox(height: 10),
+          // Zone Status Placeholder
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                child: const Icon(Icons.map, color: Colors.blue),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.warning_amber_rounded, size: 64, color: Colors.white),
-                    SizedBox(height: 8),
                     Text(
-                      'SOS',
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                      'Estado de Zona',
+                      style: TextStyle(fontSize: 14, color: Colors.grey),
+                    ),
+                    Text(
+                      'Monitoreado por el Tutor',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
               ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVerticalDivider() {
+    return Container(
+      height: 40,
+      width: 1,
+      color: Colors.grey.withOpacity(0.2),
+    );
+  }
+
+  Widget _buildStatusItem({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required String value,
+  }) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 24),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+        ),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSOSButton(int? id, String? name) {
+    if (id == null) return const SizedBox.shrink();
+    
+    return SOSButton(
+      hijoId: id,
+      nombreHijo: name ?? 'Hijo',
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () {
+          ref.read(locationTrackingProvider.notifier).startTracking();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ubicación actualizada manualmente'),
+              backgroundColor: Colors.green,
             ),
             
             const SizedBox(height: 48),
