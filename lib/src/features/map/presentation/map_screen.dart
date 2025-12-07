@@ -60,29 +60,28 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       });
       
       // Listen for location updates from children
+      // Note: Zone detection is handled by the backend with PostGIS
+      // The backend sends FCM notifications when a child enters/exits a zone
       socketService.locationStream.listen((data) {
         print('📍 Location update received in MapScreen: $data');
         if (mounted) {
           setState(() {
             final childId = data['childId'].toString();
-            print('📍 Looking for childId: "$childId"');
+            final lat = (data['lat'] as num).toDouble();
+            final lng = (data['lng'] as num).toDouble();
             
             final childrenAsync = ref.read(childrenProvider);
             childrenAsync.whenData((children) {
-              print('📍 Available children IDs: ${children.map((c) => '"${c.id}"').toList()}');
               final childIndex = children.indexWhere((c) => c.id == childId);
-              print('📍 Found at index: $childIndex');
               if (childIndex != -1) {
                 final originalChild = children[childIndex];
                 _liveChildren[childId] = originalChild.copyWith(
-                  latitude: (data['lat'] as num).toDouble(),
-                  longitude: (data['lng'] as num).toDouble(),
+                  latitude: lat,
+                  longitude: lng,
                   battery: (data['battery'] as num).toDouble(),
                   status: data['status'] as String,
                 );
                 print('📍 Updated _liveChildren[$childId] with new location');
-              } else {
-                print('⚠️ Child with ID "$childId" NOT FOUND in children list!');
               }
             });
           });

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:vibration/vibration.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../features/notifications/presentation/providers/notifications_provider.dart';
 import '../../../features/notifications/domain/entities/app_notification.dart';
@@ -16,6 +17,19 @@ class AlertsScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Notificaciones'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              ref.read(notificationsProvider.notifier).refresh();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Actualizando notificaciones...'),
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            },
+            tooltip: 'Actualizar',
+          ),
           if (notifications.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.done_all),
@@ -34,24 +48,38 @@ class AlertsScreen extends ConsumerWidget {
             ),
         ],
       ),
-      body: notifications.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.notifications_none, size: 64, color: Colors.grey.shade400),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No hay notificaciones',
-                    style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await ref.read(notificationsProvider.notifier).refresh();
+        },
+        child: notifications.isEmpty
+          ? ListView(
+              children: [
+                SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.notifications_none, size: 64, color: Colors.grey.shade400),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No hay notificaciones',
+                        style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Las notificaciones aparecerán aquí',
+                        style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Desliza hacia abajo para actualizar',
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Las notificaciones aparecerán aquí',
-                    style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-                  ),
-                ],
-              ),
+                ),
+              ],
             )
           : ListView.builder(
               itemCount: notifications.length,
@@ -112,9 +140,26 @@ class AlertsScreen extends ConsumerWidget {
                                 shape: BoxShape.circle,
                               ),
                             ),
-                      onTap: () {
+                      onTap: () async {
                         if (!notification.isRead) {
-                          ref.read(notificationsProvider.notifier).markAsRead(notification.id);
+                          // Haptic feedback
+                          if (await Vibration.hasVibrator() ?? false) {
+                            await Vibration.vibrate(duration: 100);
+                          }
+                          
+                          // Mark as read
+                          await ref.read(notificationsProvider.notifier).markAsRead(notification.id);
+                          
+                          // Show confirmation
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('✅ Marcada como leída'),
+                                duration: Duration(seconds: 1),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
                         }
                       },
                     ),
@@ -122,6 +167,7 @@ class AlertsScreen extends ConsumerWidget {
                 );
               },
             ),
+      ),
     );
   }
 

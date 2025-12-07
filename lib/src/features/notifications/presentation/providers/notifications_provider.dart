@@ -22,11 +22,10 @@ final fcmServiceProvider = Provider<FCMService>((ref) {
 
 // Notifications State Provider using Riverpod 3.x Notifier
 class NotificationsNotifier extends Notifier<List<AppNotification>> {
-  late final NotificationsRepository _repository;
+  NotificationsRepository get _repository => ref.read(notificationsRepositoryProvider);
 
   @override
   List<AppNotification> build() {
-    _repository = ref.read(notificationsRepositoryProvider);
     _fetchNotifications();
     return [];
   }
@@ -56,10 +55,16 @@ class NotificationsNotifier extends Notifier<List<AppNotification>> {
   }
 
   Future<void> markAsRead(String id) async {
+    debugPrint('📬 markAsRead called for id: $id');
+    
     final notificationIndex = state.indexWhere((n) => n.id == id);
-    if (notificationIndex == -1) return;
+    if (notificationIndex == -1) {
+      debugPrint('❌ Notification not found: $id');
+      return;
+    }
 
     final notification = state[notificationIndex];
+    debugPrint('📬 Notification found: isLocal=${notification.isLocal}, isRead=${notification.isRead}');
     
     // Optimistic update
     final updatedNotification = notification.copyWith(isRead: true);
@@ -67,17 +72,24 @@ class NotificationsNotifier extends Notifier<List<AppNotification>> {
     newState[notificationIndex] = updatedNotification;
     state = newState;
 
+    // Skip backend call only for truly local notifications (not from backend)
     if (notification.isLocal) {
+      debugPrint('⏭️ Skipping backend call - local notification');
       return;
     }
 
     try {
+      debugPrint('📤 Calling backend markAsRead for id: $id');
       await _repository.markAsRead([id]);
-      // Refresh unread count if needed
+      debugPrint('✅ Backend markAsRead successful for id: $id');
+      // Refresh unread count
       ref.refresh(unreadCountProvider);
     } catch (e) {
-      debugPrint('Error marking notification as read: $e');
-      // Revert on error? For now, keep optimistic update as it's better UX
+      debugPrint('❌ Error marking notification as read: $e');
+      // Revert optimistic update on error
+      final revertedState = List<AppNotification>.from(state);
+      revertedState[notificationIndex] = notification;
+      state = revertedState;
     }
   }
 

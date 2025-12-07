@@ -57,11 +57,13 @@ class AppNotification {
   static String _getTitleFromType(String type) {
     switch (type) {
       case 'alert':
+      case 'sos_panico':
         return 'Alerta de Seguridad';
       case 'zone_entry':
-        return 'Entrada a Zona';
+      case 'zona_segura':
+        return '✅ Zona Segura';
       case 'zone_exit':
-        return 'Salida de Zona';
+        return '⚠️ Salida de Zona';
       case 'low_battery':
         return 'Batería Baja';
       default:
@@ -72,12 +74,14 @@ class AppNotification {
   static NotificationType _getTypeFromString(String type) {
     switch (type) {
       case 'zone_entry':
+      case 'zona_segura':
         return NotificationType.zoneEntry;
       case 'zone_exit':
         return NotificationType.zoneExit;
       case 'low_battery':
         return NotificationType.lowBattery;
       case 'alert':
+      case 'sos_panico':
         return NotificationType.alert;
       default:
         return NotificationType.general;

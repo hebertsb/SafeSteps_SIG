@@ -161,6 +161,12 @@ class RemoteNotificationsDataSourceImpl
     if (token == null) throw Exception('No authenticated user');
 
     final uri = Uri.parse('$_baseUrl/notifications/mark-read');
+    
+    // Convert IDs to integers for backend
+    final intIds = ids.map((id) => int.tryParse(id) ?? id).toList();
+    
+    print('📤 markAsRead API call to: $uri');
+    print('📤 IDs to mark: $intIds');
 
     try {
       final response = await client.post(
@@ -170,14 +176,20 @@ class RemoteNotificationsDataSourceImpl
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
-          'notificationIds': ids.map((id) => int.tryParse(id) ?? id).toList(),
+          'notificationIds': intIds,
         }),
       );
 
+      print('📤 markAsRead response status: ${response.statusCode}');
+      print('📤 markAsRead response body: ${response.body}');
+
       if (response.statusCode != 200) {
-        throw Exception('Failed to mark as read: ${response.statusCode}');
+        throw Exception('Failed to mark as read: ${response.statusCode} - ${response.body}');
       }
+      
+      print('✅ Successfully marked as read in backend');
     } catch (e) {
+      print('❌ Error in markAsRead API: $e');
       throw Exception('Error marking as read: $e');
     }
   }
