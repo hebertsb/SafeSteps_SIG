@@ -4,6 +4,10 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../domain/entities/app_user.dart';
 import '../../../../core/services/secure_storage_service.dart';
+import '../../../../core/providers/location_provider.dart';
+import '../../../zones/presentation/providers/safe_zones_provider.dart';
+import '../../../map/presentation/providers/children_provider.dart';
+import '../../../notifications/presentation/providers/notifications_provider.dart';
 
 // Auth Repository Provider
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
@@ -43,6 +47,9 @@ class AuthController extends AsyncNotifier<AppUser?> {
         );
 
         if (userId != null && userName != null && userEmail != null) {
+          // Sync FCM Token on startup
+          await _syncFcmToken(token);
+
           return AppUser(
             id: userId,
             email: userEmail,
@@ -171,6 +178,16 @@ class AuthController extends AsyncNotifier<AppUser?> {
 
   Future<void> logout() async {
     await SecureStorageService.instance.deleteAll();
+    
+    // Invalidate all user-specific providers to clear cached data
+    // This prevents data from previous user being visible to new user
+    ref.invalidate(safeZonesProvider);
+    ref.invalidate(childrenProvider);
+    ref.invalidate(notificationsProvider);
+    ref.invalidate(unreadCountProvider);
+    ref.invalidate(locationTrackingProvider);
+    ref.invalidate(lastLocationProvider);
+    
     // Sign out from Firebase to prevent conflicts
     final authRepository = ref.read(authRepositoryProvider);
     await authRepository.signOut();

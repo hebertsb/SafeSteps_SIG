@@ -68,12 +68,100 @@ class _EditZoneScreenState extends ConsumerState<EditZoneScreen> {
     });
   }
 
+  Future<void> _showChildrenSelectionDialog(List<dynamic> children) async {
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  Icon(Icons.people, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  const Text('Seleccionar Hijos'),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: children.length,
+                  itemBuilder: (context, index) {
+                    final child = children[index];
+                    final isSelected = _selectedChildrenIds.contains(child.id);
+                    return Card(
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      color: isSelected ? AppColors.primary.withOpacity(0.1) : null,
+                      child: CheckboxListTile(
+                        title: Text(
+                          child.name,
+                          style: TextStyle(
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                        secondary: CircleAvatar(
+                          backgroundColor: AppColors.primary.withOpacity(0.2),
+                          child: Text(child.emoji),
+                        ),
+                        value: isSelected,
+                        activeColor: AppColors.primary,
+                        onChanged: (bool? value) {
+                          setStateDialog(() {
+                            if (value == true) {
+                              _selectedChildrenIds.add(child.id);
+                            } else {
+                              _selectedChildrenIds.remove(child.id);
+                            }
+                          });
+                          setState(() {});
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('Listo', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _saveChanges() async {
     if (!_formKey.currentState!.validate()) return;
     
     if (_polygonPoints.length < 3) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('El polígono debe tener al menos 3 puntos')),
+        const SnackBar(
+          content: Text('El polígono debe tener al menos 3 puntos'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedChildrenIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor selecciona al menos un hijo'),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
@@ -90,21 +178,17 @@ class _EditZoneScreenState extends ConsumerState<EditZoneScreen> {
         updates['descripcion'] = _descriptionController.text;
       }
       
-      // Always send polygon if modified, or maybe check if points changed
       if (_isPolygonModified) {
-         // Ensure closed polygon
         final List<List<double>> closedPoints = _polygonPoints.map((p) => [p.longitude, p.latitude]).toList();
         if (closedPoints.isNotEmpty && closedPoints.first != closedPoints.last) {
            closedPoints.add(closedPoints.first);
         }
-
         updates['poligono'] = {
           "type": "Polygon",
           "coordinates": [closedPoints]
         };
       }
 
-      // Check if children changed
       final originalIds = widget.zone.children.map((c) => c.id).toSet();
       final newIds = _selectedChildrenIds.toSet();
       if (originalIds.length != newIds.length || !originalIds.containsAll(newIds)) {
@@ -124,13 +208,19 @@ class _EditZoneScreenState extends ConsumerState<EditZoneScreen> {
       if (mounted) {
         context.pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Zona actualizada exitosamente')),
+          const SnackBar(
+            content: Text('✅ Zona actualizada exitosamente'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al actualizar zona: $e')),
+          SnackBar(
+            content: Text('Error al actualizar zona: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -145,18 +235,18 @@ class _EditZoneScreenState extends ConsumerState<EditZoneScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Editar Zona Segura'),
-        actions: [
-          TextButton(
-            onPressed: _isLoading ? null : _saveChanges,
-            child: _isLoading 
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Guardar', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _isLoading ? null : _saveChanges,
+        label: _isLoading 
+          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+          : const Text('Guardar Zona'),
+        icon: _isLoading ? null : const Icon(Icons.save),
+        backgroundColor: AppColors.primary,
       ),
       body: Column(
         children: [
-          // Mapa
+          // Mapa para editar polígono
           Expanded(
             flex: 3,
             child: Stack(
@@ -173,6 +263,7 @@ class _EditZoneScreenState extends ConsumerState<EditZoneScreen> {
                       urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.safesteps.safe_steps_mobile',
                     ),
+                    // Polígono
                     PolygonLayer(
                       polygons: [
                         if (_polygonPoints.isNotEmpty)
@@ -180,27 +271,33 @@ class _EditZoneScreenState extends ConsumerState<EditZoneScreen> {
                             points: _polygonPoints,
                             color: Colors.orange.withOpacity(0.3),
                             borderColor: Colors.orange,
-                            borderStrokeWidth: 2,
+                            borderStrokeWidth: 3,
                             isFilled: true,
                           ),
                       ],
                     ),
+                    // Marcadores de vértices
                     MarkerLayer(
-                      markers: _polygonPoints.map((point) => Marker(
-                        point: point,
-                        width: 12,
-                        height: 12,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.orange,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
+                      markers: _polygonPoints.map((point) {
+                        return Marker(
+                          point: point,
+                          width: 30,
+                          height: 30,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.orange,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: const [BoxShadow(blurRadius: 2, color: Colors.black26)],
+                            ),
+                            child: const Icon(Icons.drag_handle, size: 16, color: Colors.white),
                           ),
-                        ),
-                      )).toList(),
+                        );
+                      }).toList(),
                     ),
                   ],
                 ),
+                // Controles del mapa
                 Positioned(
                   bottom: 16,
                   right: 16,
@@ -223,6 +320,31 @@ class _EditZoneScreenState extends ConsumerState<EditZoneScreen> {
                         child: const Icon(Icons.delete_outline, color: Colors.red),
                       ),
                     ],
+                  ),
+                ),
+                // Instrucción
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  right: 16,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Text(
+                      'Toca para agregar puntos. Usa deshacer para corregir.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                    ),
                   ),
                 ),
               ],
@@ -248,54 +370,136 @@ class _EditZoneScreenState extends ConsumerState<EditZoneScreen> {
                 key: _formKey,
                 child: ListView(
                   children: [
+                    const Text(
+                      'Configuración de Zona',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Nombre de la zona
                     TextFormField(
                       controller: _nameController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Nombre de la zona',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.label),
+                        hintText: 'Ej: Casa, Escuela',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        prefixIcon: const Icon(Icons.label),
+                        filled: true,
+                        fillColor: Colors.grey[50],
                       ),
                       validator: (value) => value == null || value.isEmpty ? 'Requerido' : null,
                     ),
                     const SizedBox(height: 12),
+
+                    // Descripción
                     TextFormField(
                       controller: _descriptionController,
-                      decoration: const InputDecoration(
-                        labelText: 'Descripción',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.description),
+                      decoration: InputDecoration(
+                        labelText: 'Descripción (Opcional)',
+                        hintText: 'Ej: Zona segura alrededor de casa',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        prefixIcon: const Icon(Icons.description),
+                        filled: true,
+                        fillColor: Colors.grey[50],
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     
+                    // Selección de hijos
                     const Text('Asignar a:', style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     childrenAsync.when(
-                      data: (children) => Wrap(
-                        spacing: 8.0,
-                        children: children.map((child) {
-                          final isSelected = _selectedChildrenIds.contains(child.id);
-                          return FilterChip(
-                            label: Text(child.name),
-                            selected: isSelected,
-                            onSelected: (selected) {
-                              setState(() {
-                                if (selected) {
-                                  _selectedChildrenIds.add(child.id);
-                                } else {
-                                  _selectedChildrenIds.remove(child.id);
-                                }
-                              });
-                            },
-                            avatar: Text(child.emoji),
-                            selectedColor: AppColors.primary.withOpacity(0.2),
-                            checkmarkColor: AppColors.primary,
-                          );
-                        }).toList(),
+                      data: (children) => InkWell(
+                        onTap: () => _showChildrenSelectionDialog(children),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(12),
+                            color: Colors.grey[50],
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.person, color: AppColors.primary),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _selectedChildrenIds.isEmpty
+                                    ? Text(
+                                        'Seleccionar hijos...',
+                                        style: TextStyle(color: Colors.grey[600]),
+                                      )
+                                    : Wrap(
+                                        spacing: 8,
+                                        children: children
+                                            .where((c) => _selectedChildrenIds.contains(c.id))
+                                            .map((c) => Chip(
+                                                  avatar: Text(c.emoji),
+                                                  label: Text(c.name),
+                                                  backgroundColor: AppColors.primary.withOpacity(0.1),
+                                                ))
+                                            .toList(),
+                                      ),
+                              ),
+                              const Icon(Icons.arrow_drop_down),
+                            ],
+                          ),
+                        ),
                       ),
                       loading: () => const LinearProgressIndicator(),
-                      error: (err, _) => Text('Error: $err'),
+                      error: (err, _) => Text('Error cargando hijos: $err', style: const TextStyle(color: Colors.red)),
                     ),
+                    if (_selectedChildrenIds.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          'Selecciona al menos un hijo',
+                          style: TextStyle(color: Colors.red, fontSize: 12),
+                        ),
+                      ),
+                    
+                    const SizedBox(height: 16),
+                    
+                    // Resumen de puntos
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.polyline, color: Colors.orange[700]),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${_polygonPoints.length} puntos definidos',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const Spacer(),
+                          if (_polygonPoints.length < 3)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.orange[100],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'Mínimo 3',
+                                style: TextStyle(color: Colors.orange, fontSize: 12),
+                              ),
+                            )
+                          else
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: Colors.green,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.check, color: Colors.white, size: 16),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 80), // Space for FAB
                   ],
                 ),
               ),

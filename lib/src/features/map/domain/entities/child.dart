@@ -80,6 +80,8 @@ class Child {
     double? latitude,
     double? longitude,
     DateTime? lastUpdated,
+    List<Tutor>? tutors,
+    String? codigoVinculacion,
   }) {
     return Child(
       id: id ?? this.id,
@@ -94,6 +96,8 @@ class Child {
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       lastUpdated: lastUpdated ?? this.lastUpdated,
+      tutors: tutors ?? this.tutors,
+      codigoVinculacion: codigoVinculacion ?? this.codigoVinculacion,
     );
   }
 }

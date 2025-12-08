@@ -6,6 +6,7 @@ class AppNotification {
   final NotificationType type;
   final Map<String, dynamic> data;
   final bool isRead;
+  final bool isLocal;
 
   const AppNotification({
     required this.id,
@@ -15,6 +16,7 @@ class AppNotification {
     required this.type,
     this.data = const {},
     this.isRead = false,
+    this.isLocal = false,
   });
 
   AppNotification copyWith({
@@ -25,6 +27,7 @@ class AppNotification {
     NotificationType? type,
     Map<String, dynamic>? data,
     bool? isRead,
+    bool? isLocal,
   }) {
     return AppNotification(
       id: id ?? this.id,
@@ -34,6 +37,7 @@ class AppNotification {
       type: type ?? this.type,
       data: data ?? this.data,
       isRead: isRead ?? this.isRead,
+      isLocal: isLocal ?? this.isLocal,
     );
   }
 
@@ -45,6 +49,7 @@ class AppNotification {
       timestamp: DateTime.parse(json['createdAt']),
       type: _getTypeFromString(json['tipo'] ?? 'info'),
       isRead: json['leida'] ?? false,
+      isLocal: false,
       data: json,
     );
   }
@@ -52,11 +57,13 @@ class AppNotification {
   static String _getTitleFromType(String type) {
     switch (type) {
       case 'alert':
+      case 'sos_panico':
         return 'Alerta de Seguridad';
       case 'zone_entry':
-        return 'Entrada a Zona';
+      case 'zona_segura':
+        return '✅ Zona Segura';
       case 'zone_exit':
-        return 'Salida de Zona';
+        return '⚠️ Salida de Zona';
       case 'low_battery':
         return 'Batería Baja';
       default:
@@ -67,12 +74,14 @@ class AppNotification {
   static NotificationType _getTypeFromString(String type) {
     switch (type) {
       case 'zone_entry':
+      case 'zona_segura':
         return NotificationType.zoneEntry;
       case 'zone_exit':
         return NotificationType.zoneExit;
       case 'low_battery':
         return NotificationType.lowBattery;
       case 'alert':
+      case 'sos_panico':
         return NotificationType.alert;
       default:
         return NotificationType.general;

@@ -138,6 +138,8 @@ class MyApp extends ConsumerStatefulWidget {
 }
 
 class _MyAppState extends ConsumerState<MyApp> {
+  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
   @override
   void initState() {
     super.initState();
@@ -151,13 +153,18 @@ class _MyAppState extends ConsumerState<MyApp> {
         timestamp: DateTime.now(),
         type: _getNotificationType(message.data),
         data: message.data,
+        isLocal: true,
       );
 
+      // Add locally for immediate feedback
       ref.read(notificationsProvider.notifier).addNotification(notification);
+      
+      // Also refresh from backend to get any historical/other updates
+      ref.read(notificationsProvider.notifier).refresh();
 
       // Show SnackBar for foreground notifications
       if (mounted && message.notification != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        _scaffoldMessengerKey.currentState?.showSnackBar(
           SnackBar(
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -210,6 +217,7 @@ class _MyAppState extends ConsumerState<MyApp> {
       title: 'SafeSteps',
       theme: AppTheme.lightTheme,
       routerConfig: router,
+      scaffoldMessengerKey: _scaffoldMessengerKey,
       debugShowCheckedModeBanner: false,
     );
   }

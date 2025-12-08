@@ -22,19 +22,24 @@ final fcmServiceProvider = Provider<FCMService>((ref) {
 
 // Notifications State Provider using Riverpod 3.x Notifier
 class NotificationsNotifier extends Notifier<List<AppNotification>> {
-  late final NotificationsRepository _repository;
+  NotificationsRepository get _repository => ref.read(notificationsRepositoryProvider);
 
   @override
   List<AppNotification> build() {
-    _repository = ref.read(notificationsRepositoryProvider);
     _fetchNotifications();
     return [];
   }
 
   Future<void> _fetchNotifications() async {
     try {
-      final notifications = await _repository.getNotifications();
-      state = notifications;
+      final backendNotifications = await _repository.getNotifications();
+      
+      // Preserve local notifications that are not in the backend list
+      final localNotifications = state.where((n) => n.isLocal).toList();
+      
+      // Merge: Local ones first (usually newer), then backend ones
+      // Avoid duplicates if backend eventually returns the same event (unlikely if IDs differ)
+      state = [...localNotifications, ...backendNotifications];
     } catch (e) {
       // Handle error silently or expose via another provider
       debugPrint('Error fetching notifications: $e');
@@ -50,27 +55,54 @@ class NotificationsNotifier extends Notifier<List<AppNotification>> {
   }
 
   Future<void> markAsRead(String id) async {
+    debugPrint('📬 markAsRead called for id: $id');
+    
+    final notificationIndex = state.indexWhere((n) => n.id == id);
+    if (notificationIndex == -1) {
+      debugPrint('❌ Notification not found: $id');
+      return;
+    }
+
+    final notification = state[notificationIndex];
+    debugPrint('📬 Notification found: isLocal=${notification.isLocal}, isRead=${notification.isRead}');
+    
+    // Optimistic update
+    final updatedNotification = notification.copyWith(isRead: true);
+    final newState = List<AppNotification>.from(state);
+    newState[notificationIndex] = updatedNotification;
+    state = newState;
+
+    // Skip backend call only for truly local notifications (not from backend)
+    if (notification.isLocal) {
+      debugPrint('⏭️ Skipping backend call - local notification');
+      return;
+    }
+
     try {
+      debugPrint('📤 Calling backend markAsRead for id: $id');
       await _repository.markAsRead([id]);
-      state = [
-        for (final notification in state)
-          if (notification.id == id)
-            notification.copyWith(isRead: true)
-          else
-            notification,
-      ];
+      debugPrint('✅ Backend markAsRead successful for id: $id');
+      // Refresh unread count
+      ref.refresh(unreadCountProvider);
     } catch (e) {
-      debugPrint('Error marking notification as read: $e');
+      debugPrint('❌ Error marking notification as read: $e');
+      // Revert optimistic update on error
+      final revertedState = List<AppNotification>.from(state);
+      revertedState[notificationIndex] = notification;
+      state = revertedState;
     }
   }
 
   Future<void> markAllAsRead() async {
+    // Optimistic update
+    state = [
+      for (final notification in state)
+        notification.copyWith(isRead: true),
+    ];
+
     try {
       await _repository.markAllAsRead();
-      state = [
-        for (final notification in state)
-          notification.copyWith(isRead: true),
-      ];
+      ref.refresh(unreadCountProvider);
     } catch (e) {
       debugPrint('Error marking all as read: $e');
     }
@@ -95,11 +127,17 @@ class NotificationsNotifier extends Notifier<List<AppNotification>> {
   }
 
   Future<void> removeNotification(String id) async {
+    // IMPORTANT: Optimistic update FIRST - Dismissible requires immediate removal
+    final removedNotification = state.firstWhere((n) => n.id == id, orElse: () => state.first);
+    state = state.where((n) => n.id != id).toList();
+    
     try {
       await _repository.deleteNotification(id);
-      state = state.where((n) => n.id != id).toList();
+      debugPrint('✅ Notification deleted from backend: $id');
     } catch (e) {
-      debugPrint('Error removing notification: $e');
+      debugPrint('⚠️ Error removing notification from backend: $e');
+      // Optionally revert if backend fails (but usually we keep it removed from UI)
+      // state = [removedNotification, ...state];
     }
   }
 }
