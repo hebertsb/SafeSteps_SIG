@@ -186,7 +186,7 @@ class AuthController extends AsyncNotifier<AppUser?> {
     ref.invalidate(notificationsProvider);
     ref.invalidate(unreadCountProvider);
     ref.invalidate(locationTrackingProvider);
-    ref.invalidate(lastLocationProvider);
+    // ref.invalidate(lastLocationProvider); // Commented to avoid circular dependency
     
     // Sign out from Firebase to prevent conflicts
     final authRepository = ref.read(authRepositoryProvider);
